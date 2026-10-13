@@ -1,0 +1,7 @@
+# Sealed Secrets controller (kube-system), pinned to an exact release.
+# Secrets are encrypted with the controller's public key before they are
+# committed; only this controller, inside the cluster, can decrypt them.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.40.0/controller.yaml

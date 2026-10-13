@@ -1,0 +1,45 @@
+# One host per environment (patched in the overlay). The browser only ever talks
+# to that host: "/" goes to Next.js, "/api/*" goes to NestJS with the prefix
+# stripped. This is what lets one frontend image serve every environment (A2).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: HOST_SET_PER_ENV
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api
+  annotations:
+    # /api/shipments -> /shipments ; /api/socket.io/... -> /socket.io/...
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    # WebSocket connections (live tracking) stay open far longer than the 60s default.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: HOST_SET_PER_ENV
+      http:
+        paths:
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: backend
+                port:
+                  name: http

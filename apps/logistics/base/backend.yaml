@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  # Stays at 1 until Socket.io uses the Redis adapter: with 2+ pods, a client
+  # connected to pod A misses events emitted on pod B (plan A7).
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: backend
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0 # never drop below the desired count during a rollout
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: backend
+          image: ghcr.io/princebabou/logistics-backend # digest set per env
+          ports:
+            - name: http
+              containerPort: 3001
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secrets
+          # Startup: give Nest time to boot before liveness can kill it.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          # Liveness: is the process alive? (no dependencies, or a DB outage
+          # would restart every pod for nothing)
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          # Readiness: can it serve? Checks the DB; failing pods get no traffic.
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 3
+          lifecycle:
+            # Keep serving briefly after removal from the Service endpoints so
+            # the Ingress stops routing here before SIGTERM arrives.
+            preStop:
+              sleep:
+                seconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: "1"
+              memory: 384Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http # named port: survives container port changes

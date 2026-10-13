@@ -1,0 +1,44 @@
+# One Argo CD Application per environment folder, discovered automatically:
+#   apps/logistics/envs/uat    -> Application "logistics-uat" -> namespace uat
+#   infra/postgres/envs/uat    -> Application "postgres-uat"  -> namespace uat
+# Adding an app or an environment is adding a folder; no Argo config changes.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: lab-environments
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: git@github.com:princebabou/k8s-devops-lab-gitops.git
+        revision: main
+        directories:
+          - path: apps/*/envs/*
+          - path: infra/*/envs/*
+  template:
+    metadata:
+      name: '{{ index .path.segments 1 }}-{{ .path.basename }}'
+      labels:
+        env: '{{ .path.basename }}'
+    spec:
+      project: lab
+      source:
+        repoURL: git@github.com:princebabou/k8s-devops-lab-gitops.git
+        targetRevision: main
+        path: '{{ .path.path }}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ .path.basename }}'
+      syncPolicy:
+        automated:
+          prune: true    # objects deleted from Git are deleted from the cluster
+          selfHeal: true # manual kubectl edits are reverted to what Git says
+        syncOptions:
+          - CreateNamespace=true
+        managedNamespaceMetadata:
+          labels:
+            # Pod Security Admission: reject pods that run as root, escalate
+            # privileges, or keep Linux capabilities.
+            pod-security.kubernetes.io/enforce: restricted
+            pod-security.kubernetes.io/enforce-version: latest

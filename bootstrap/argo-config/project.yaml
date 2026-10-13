@@ -1,0 +1,20 @@
+# Fences what lab apps may do: only this repo as a source, only the uat and
+# staging namespaces as destinations, and no cluster-scoped objects except the
+# Namespace that CreateNamespace makes. A mistaken path cannot touch kube-system,
+# argocd or another team's namespace.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: lab
+spec:
+  description: Logistics lab environments
+  sourceRepos:
+    - git@github.com:princebabou/k8s-devops-lab-gitops.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: uat
+    - server: https://kubernetes.default.svc
+      namespace: staging
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
