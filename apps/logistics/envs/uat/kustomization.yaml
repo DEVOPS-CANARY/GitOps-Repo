@@ -21,6 +21,10 @@ configMapGenerator:
       - NODE_ENV=production
       - PORT=3001
       - ALLOWED_ORIGINS=http://uat.logistics.local
+      # Required in practice: the app passes these straight to jsonwebtoken,
+      # which rejects an undefined issuer, so login fails when they are unset.
+      - JWT_ISSUER=logistics-api-uat
+      - JWT_AUDIENCE=logistics-web-uat
 
 patches:
   # Secrets must exist before the migration Job (wave -1) and the apps (wave 0).
