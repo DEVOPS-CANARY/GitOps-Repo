@@ -37,7 +37,9 @@ spec:
                 name: postgres-credentials # POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
           readinessProbe:
             exec:
-              command: ["pg_isready", "-h", "127.0.0.1"]
+              # As the app's own user/database: the default "postgres" role does
+              # not exist here, and probing as it floods the log with FATALs.
+              command: ["sh", "-c", 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
             periodSeconds: 5
           resources:
             requests:
