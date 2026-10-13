@@ -34,6 +34,15 @@ spec:
         automated:
           prune: true    # objects deleted from Git are deleted from the cluster
           selfHeal: true # manual kubectl edits are reverted to what Git says
+        # A failed sync is not retried for the same commit unless asked to.
+        # Retry with backoff so transient failures (e.g. the DB still starting
+        # when migrations run) recover without a human.
+        retry:
+          limit: 5
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m
         syncOptions:
           - CreateNamespace=true
         managedNamespaceMetadata:
