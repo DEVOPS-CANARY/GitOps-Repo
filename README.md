@@ -21,6 +21,7 @@ an Argo CD Application named `<app>-<env>`, deployed to namespace `<env>`.
 ```sh
 kubectl apply -k bootstrap/argocd --server-side
 kubectl apply -k bootstrap/sealed-secrets --server-side
+kubectl apply -k bootstrap/lab-storage        # minikube lab only
 # repo access for Argo CD (read-only deploy key), then:
 kubectl apply -k bootstrap/argo-config
 ```
