@@ -9,9 +9,9 @@ resources:
 # CI rewrites these lines on every merge to develop.
 images:
   - name: ghcr.io/princebabou/logistics-backend
-    digest: sha256:1a3f76960f23c0b98faee0c622113fc6552b892ab64dc8e22f7cfdf1698dcbea # sha-70aed8d tree-b5fd4983
+    digest: sha256:1a3f76960f23c0b98faee0c622113fc6552b892ab64dc8e22f7cfdf1698dcbea # sha-2082aea tree-b5fd4983
   - name: ghcr.io/princebabou/logistics-frontend
-    digest: sha256:26b77f9fd08d5450c3cf28df367d13a69d927b506215980db9e2dee50ecc9bbc # sha-70aed8d tree-b5fd4983
+    digest: sha256:26b77f9fd08d5450c3cf28df367d13a69d927b506215980db9e2dee50ecc9bbc # sha-2082aea tree-b5fd4983
 
 # Non-secret config. The name gets a content hash, so changing a value
 # changes the Deployment spec and rolls the pods automatically.
