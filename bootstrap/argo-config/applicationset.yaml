@@ -1,7 +1,11 @@
 # One Argo CD Application per environment folder, discovered automatically:
-#   apps/logistics/envs/uat    -> Application "logistics-uat" -> namespace uat
-#   infra/postgres/envs/uat    -> Application "postgres-uat"  -> namespace uat
+#   apps/logistics/envs/uat/values.yaml -> Application "logistics-uat" (rssb-app chart)
+#   infra/postgres/envs/uat             -> Application "postgres-uat"  (plain manifests)
 # Adding an app or an environment is adding a folder; no Argo config changes.
+#
+# Both kinds live in this ONE ApplicationSet on purpose: moving an Application
+# to another ApplicationSet deletes it, and its resources-finalizer would delete
+# everything it deployed.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -10,11 +14,38 @@ spec:
   goTemplate: true
   goTemplateOptions: ["missingkey=error"]
   generators:
+    # Apps: the platform chart, at the version pinned in the env's values file
+    # (chart.version), rendered with that values file. Sealed secrets come from
+    # the env's secrets/ folder. This template's `sources` replaces the default one below.
+    - git:
+        repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
+        revision: main
+        files:
+          - path: apps/*/envs/*/values.yaml
+      template:
+        metadata: {}
+        spec:
+          project: lab
+          destination: {}
+          sources:
+            - repoURL: ghcr.io/devops-canary/charts
+              chart: rssb-app
+              targetRevision: '{{ .chart.version }}'
+              helm:
+                releaseName: '{{ index .path.segments 1 }}'
+                valueFiles:
+                  - '$values/{{ .path.path }}/values.yaml'
+            - repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
+              targetRevision: main
+              ref: values
+            - repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
+              targetRevision: main
+              path: '{{ .path.path }}/secrets'
+    # Infra stand-ins: plain manifests (Kustomize) in the folder itself.
     - git:
         repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
         revision: main
         directories:
-          - path: apps/*/envs/*
           - path: infra/*/envs/*
   template:
     metadata:
@@ -23,10 +54,10 @@ spec:
         env: '{{ .path.basename }}'
     spec:
       project: lab
-      source:
-        repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
-        targetRevision: main
-        path: '{{ .path.path }}'
+      sources:
+        - repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
+          targetRevision: main
+          path: '{{ .path.path }}'
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{ .path.basename }}'

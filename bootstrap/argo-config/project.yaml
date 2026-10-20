@@ -10,6 +10,7 @@ spec:
   description: Logistics lab environments
   sourceRepos:
     - git@github.com:DEVOPS-CANARY/GitOps-Repo.git
+    - ghcr.io/devops-canary/charts # platform Helm charts (DEVOPS-CANARY/helm-charts)
   destinations:
     - server: https://kubernetes.default.svc
       namespace: uat

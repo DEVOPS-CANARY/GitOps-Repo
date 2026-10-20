@@ -8,14 +8,17 @@ bootstrap/                 applied once by hand, in this order
   argocd/                  Argo CD, pinned release
   sealed-secrets/          Sealed Secrets controller + its public sealing cert
   argo-config/             AppProject "lab" + the ApplicationSet
-apps/<app>/
-  base/                    environment-independent manifests
-  envs/<env>/              image digests, config, sealed secrets, host
+apps/<app>/envs/<env>/
+  values.yaml              chart version, image digests, config, host (rssb-app chart)
+  secrets/                 sealed secrets for this app in this environment
 infra/<component>/envs/<env>   lab stand-ins for external services (Postgres)
 ```
 
-The ApplicationSet turns every `apps/*/envs/*` and `infra/*/envs/*` folder into
-an Argo CD Application named `<app>-<env>`, deployed to namespace `<env>`.
+The ApplicationSet turns every `apps/*/envs/*/values.yaml` and `infra/*/envs/*`
+folder into an Argo CD Application named `<app>-<env>`, deployed to namespace `<env>`.
+Apps are rendered by the platform chart
+[`rssb-app`](https://github.com/DEVOPS-CANARY/helm-charts) at the version in
+`chart.version`, so there is no Kubernetes YAML to copy per app.
 
 ## Your own lab cluster (teammates start here)
 
@@ -63,7 +66,7 @@ kubectl apply -k bootstrap/argo-config
 ```
 
 ## Deploying
-- **UAT:** CI commits the new image digest to `apps/<app>/envs/uat` on every
+- **UAT:** CI commits the new image digest to `apps/<app>/envs/uat/values.yaml` on every
   merge to the app's `develop` branch.
 - **Staging:** promotion copies the digest already tested in UAT (no rebuild).
 - **Rollback:** `git revert` the commit that changed the digest.

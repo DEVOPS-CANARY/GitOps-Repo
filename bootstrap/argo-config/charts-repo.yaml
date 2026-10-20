@@ -1,0 +1,14 @@
+# Tells Argo CD that ghcr.io/devops-canary/charts is a Helm registry served
+# over OCI. No credentials: the chart package is public (charts hold no
+# secrets). A private registry would add username/password here, sealed.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-devops-canary-charts
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: devops-canary-charts
+  url: ghcr.io/devops-canary/charts
+  enableOCI: "true"
