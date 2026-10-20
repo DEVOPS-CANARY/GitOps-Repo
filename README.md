@@ -1,4 +1,4 @@
-# k8s-devops-lab-gitops
+# GitOps-Repo (DEVOPS-CANARY)
 
 Desired state of the lab cluster. Argo CD watches this repo and makes the
 cluster match it; nobody runs `kubectl apply` for apps.

@@ -9,7 +9,7 @@ metadata:
 spec:
   description: Logistics lab environments
   sourceRepos:
-    - git@github.com:princebabou/k8s-devops-lab-gitops.git
+    - git@github.com:DEVOPS-CANARY/GitOps-Repo.git
   destinations:
     - server: https://kubernetes.default.svc
       namespace: uat
