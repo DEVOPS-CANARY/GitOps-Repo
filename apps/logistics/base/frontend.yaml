@@ -37,7 +37,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: frontend
-          image: ghcr.io/princebabou/logistics-frontend # digest set per env
+          image: ghcr.io/devops-canary/logistics-frontend # digest set per env
           ports:
             - name: http
               containerPort: 3000

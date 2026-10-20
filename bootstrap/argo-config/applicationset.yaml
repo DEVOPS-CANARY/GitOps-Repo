@@ -11,7 +11,7 @@ spec:
   goTemplateOptions: ["missingkey=error"]
   generators:
     - git:
-        repoURL: git@github.com:princebabou/k8s-devops-lab-gitops.git
+        repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
         revision: main
         directories:
           - path: apps/*/envs/*
@@ -24,7 +24,7 @@ spec:
     spec:
       project: lab
       source:
-        repoURL: git@github.com:princebabou/k8s-devops-lab-gitops.git
+        repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
         targetRevision: main
         path: '{{ .path.path }}'
       destination:

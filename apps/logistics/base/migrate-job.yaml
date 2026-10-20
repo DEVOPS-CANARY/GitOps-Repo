@@ -33,7 +33,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: migrate
-          image: ghcr.io/princebabou/logistics-backend # same image (and digest) as the app
+          image: ghcr.io/devops-canary/logistics-backend # same image (and digest) as the app
           command: ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
           envFrom:
             - secretRef:
