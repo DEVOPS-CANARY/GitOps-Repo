@@ -24,6 +24,20 @@ step() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 ok()   { printf '   ok: %s\n' "$*"; }
 die()  { printf '\n   ERROR: %s\n' "$*" >&2; exit 1; }
 fingerprint() { openssl x509 -noout -fingerprint -sha256 | cut -d= -f2; }
+# Wait for a rollout; on timeout, show WHY (pending, image pull, crash) instead
+# of a bare "timed out". Usage: wait_ready <namespace> <kind/name> <pod-selector>
+wait_ready() {
+  if ! kubectl -n "$1" rollout status "$2" --timeout=300s >/dev/null; then
+    echo; echo "   $2 is not ready after 5 minutes. Pod status:"
+    kubectl -n "$1" get pods -l "$3" -o wide | sed 's/^/     /'
+    echo "   Recent events:"
+    kubectl -n "$1" get events --sort-by=.lastTimestamp       --field-selector involvedObject.kind=Pod 2>/dev/null | grep -i "${2#*/}" | tail -8 | sed 's/^/     /'
+    die "fix the cause above, then re-run this script (it is safe to re-run).
+   Common causes: slow first image download (just re-run), ImagePullBackOff
+   (network/DNS/proxy to docker.io or quay.io), Pending (cluster too small:
+   minikube start --cpus 2 --memory 4096)"
+  fi
+}
 
 [ -f bootstrap/argo-config/applicationset.yaml ] || die "run this from the root of GitOps-Repo"
 
@@ -51,7 +65,7 @@ if kubectl -n kube-system get deploy sealed-secrets-controller >/dev/null 2>&1; 
   kubectl -n kube-system rollout restart deploy/sealed-secrets-controller >/dev/null
 fi
 kubectl apply -k bootstrap/sealed-secrets --server-side >/dev/null
-kubectl -n kube-system rollout status deploy/sealed-secrets-controller --timeout=180s >/dev/null
+wait_ready kube-system deploy/sealed-secrets-controller name=sealed-secrets-controller
 want="$(fingerprint < bootstrap/sealed-secrets/pub-cert.pem)"
 have="$(kubectl -n kube-system get secret -l sealedsecrets.bitnami.com/sealed-secrets-key \
   -o jsonpath='{range .items[*]}{.data.tls\.crt}{"\n"}{end}' \
@@ -69,8 +83,10 @@ fi
 
 step "4/6 Argo CD"
 kubectl apply -k bootstrap/argocd --server-side >/dev/null
-kubectl -n argocd wait --for=condition=Available deploy --all --timeout=300s >/dev/null
-kubectl -n argocd rollout status statefulset/argocd-application-controller --timeout=300s >/dev/null
+for d in $(kubectl -n argocd get deploy -o name); do
+  wait_ready argocd "$d" "app.kubernetes.io/name=${d#*/}"
+done
+wait_ready argocd statefulset/argocd-application-controller app.kubernetes.io/name=argocd-application-controller
 ok "Argo CD is running"
 
 step "5/6 Read-only access to GitOps-Repo for YOUR Argo CD"
