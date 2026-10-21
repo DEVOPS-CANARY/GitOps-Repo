@@ -121,13 +121,18 @@ echo "   sandbox/<name>  = your own experiments; nobody else's cluster reads it"
 BRANCH="${BRANCH:-}"
 [ -n "$BRANCH" ] || read -r -p "   Branch [main]: " BRANCH
 BRANCH="${BRANCH:-main}"
+[[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] \
+  || die "branch '$BRANCH': use only letters, digits, '.', '_', '-' and '/'"
 git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1 \
   || die "branch '$BRANCH' does not exist on GitOps-Repo (push it first: git push -u origin $BRANCH)"
-# The branch is named twice in the ApplicationSet (which folders exist, and
-# which commit to deploy); switch both.
-kubectl kustomize bootstrap/argo-config \
-  | sed -E "s/^([[:space:]]*)(revision|targetRevision): main$/\1\2: $BRANCH/" \
-  | kubectl apply -f - >/dev/null
+# The ApplicationSet names the branch in several places (which folders exist,
+# which commit to deploy); switch them all. '#' as the sed separator, because
+# branch names contain '/' (sandbox/<name>).
+config="$(kubectl kustomize bootstrap/argo-config \
+  | sed -E "s#^([[:space:]]*)(revision|targetRevision): main\$#\1\2: $BRANCH#")"
+grep -qE "(revision|targetRevision): $BRANCH\$" <<<"$config" \
+  || die "could not point the ApplicationSet at '$BRANCH' (no 'revision: main' found)"
+kubectl apply -f - <<<"$config" >/dev/null
 ok "following '$BRANCH'"
 
 step "Done"
