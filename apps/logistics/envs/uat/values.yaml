@@ -3,7 +3,7 @@
 # DEVOPS-CANARY/helm-charts/charts/rssb-app/values.yaml for the rest.
 
 chart:
-  version: 0.2.0 # rssb-app chart version for this environment (read by Argo CD)
+  version: 0.2.1 # rssb-app chart version for this environment (read by Argo CD)
 
 partOf: logistics
 
