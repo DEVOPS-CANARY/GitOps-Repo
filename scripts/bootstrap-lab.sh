@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Sets up a lab cluster from nothing: team sealing key -> Sealed Secrets ->
-# storage -> Argo CD -> repo access -> ApplicationSet. After that Argo CD
-# deploys everything in this repo by itself.
+# lab databases (Docker, outside the cluster) -> Argo CD -> repo access ->
+# ApplicationSet. After that Argo CD deploys everything in this repo by itself.
 #
 # Usage (from the root of GitOps-Repo, with kubectl pointing at YOUR cluster):
 #   ./scripts/bootstrap-lab.sh
@@ -9,14 +9,12 @@
 # Options (environment variables):
 #   TEAM_SECRETS=../team-secrets   path to your clone of DEVOPS-CANARY/team-secrets
 #   BRANCH=main                    GitOps branch this cluster follows (asked if unset)
-#   LAB_STORAGE=yes                install local-path storage (minikube needs it)
 #
 # Safe to re-run: every step either applies the same thing again or skips.
 set -euo pipefail
 
 REPO_SSH="git@github.com:DEVOPS-CANARY/GitOps-Repo.git"
 TEAM_SECRETS="${TEAM_SECRETS:-../team-secrets}"
-LAB_STORAGE="${LAB_STORAGE:-yes}"
 GH_USER="${GH_USER:-$(git config user.name 2>/dev/null | tr -cs 'A-Za-z0-9' '-' | tr 'A-Z' 'a-z' | sed 's/-$//')}"
 KEY="$HOME/.ssh/argocd-${GH_USER:-lab}-gitops"
 
@@ -42,7 +40,7 @@ wait_ready() {
 [ -f bootstrap/argo-config/applicationset.yaml ] || die "run this from the root of GitOps-Repo"
 
 step "0/6 Checking tools and cluster"
-for t in kubectl sops git ssh-keygen openssl; do
+for t in kubectl docker sops git ssh-keygen openssl; do
   command -v "$t" >/dev/null || die "'$t' is not installed (see team-secrets/README.md for sops)"
 done
 [ -f "$TEAM_SECRETS/secrets/sealed-secrets-key.yaml" ] \
@@ -60,26 +58,24 @@ sops -d "$TEAM_SECRETS/secrets/sealed-secrets-key.yaml" | kubectl apply -f - >/d
 ok "team key loaded"
 
 step "2/6 Sealed Secrets controller"
-if kubectl -n kube-system get deploy sealed-secrets-controller >/dev/null 2>&1; then
-  # Already running with (possibly) its own key: restart so it picks up the team key.
-  kubectl -n kube-system rollout restart deploy/sealed-secrets-controller >/dev/null
-fi
 kubectl apply -k bootstrap/sealed-secrets --server-side >/dev/null
 wait_ready kube-system deploy/sealed-secrets-controller name=sealed-secrets-controller
+# Ask the controller itself which key it uses (what `kubeseal --fetch-cert` does).
 want="$(fingerprint < bootstrap/sealed-secrets/pub-cert.pem)"
-have="$(kubectl -n kube-system get secret -l sealedsecrets.bitnami.com/sealed-secrets-key \
-  -o jsonpath='{range .items[*]}{.data.tls\.crt}{"\n"}{end}' \
-  | while read -r c; do echo "$c" | base64 -d | fingerprint; done)"
-grep -qx "$want" <<<"$have" || die "the controller does not have the team key (fingerprint mismatch)"
+served() { kubectl get --raw \
+  /api/v1/namespaces/kube-system/services/http:sealed-secrets-controller:8080/proxy/v1/cert.pem \
+  2>/dev/null | fingerprint; }
+if [ "$(served)" != "$want" ]; then
+  # It started before the team key was loaded and made its own; it only reads
+  # keys at startup. One restart, only in that case.
+  kubectl -n kube-system rollout restart deploy/sealed-secrets-controller >/dev/null
+  wait_ready kube-system deploy/sealed-secrets-controller name=sealed-secrets-controller
+  [ "$(served)" = "$want" ] || die "the controller does not use the team key (fingerprint mismatch)"
+fi
 ok "controller can unlock this repo's sealed secrets"
 
-step "3/6 Storage"
-if [ "$LAB_STORAGE" = "yes" ]; then
-  kubectl apply -k bootstrap/lab-storage >/dev/null
-  ok "local-path storage installed (lab only)"
-else
-  ok "skipped (LAB_STORAGE=$LAB_STORAGE)"
-fi
+step "3/6 Lab services (databases), outside the cluster"
+TEAM_SECRETS="$TEAM_SECRETS" ./scripts/lab-services.sh
 
 step "4/6 Argo CD"
 kubectl apply -k bootstrap/argocd --server-side >/dev/null
