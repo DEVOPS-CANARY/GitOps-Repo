@@ -1,7 +1,12 @@
-# One Argo CD Application per environment folder, discovered automatically:
-#   apps/logistics/envs/uat    -> Application "logistics-uat" -> namespace uat
-#   infra/postgres/envs/uat    -> Application "postgres-uat"  -> namespace uat
-# Adding an app or an environment is adding a folder; no Argo config changes.
+# One Argo CD Application per product per environment, found from the folders:
+#   apps/logistics/envs/uat/values.yaml -> Application "logistics-uat",
+#                                          deployed to namespace "logistics-uat"
+# Adding a product or an environment is adding a folder; no Argo config changes.
+#
+# Each Application has three sources:
+#   1. the platform chart rssb-app, at the version the values file pins (chart.version)
+#   2. this repo, referenced as $values so the chart can read the values file
+#   3. the secrets/ folder next to the values file (sealed secrets, plain YAML)
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -13,30 +18,42 @@ spec:
     - git:
         repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
         revision: main
-        directories:
-          - path: apps/*/envs/*
-          - path: infra/*/envs/*
+        files:
+          - path: apps/*/envs/*/values.yaml
   template:
     metadata:
       name: '{{ index .path.segments 1 }}-{{ .path.basename }}'
       labels:
+        product: '{{ index .path.segments 1 }}'
         env: '{{ .path.basename }}'
     spec:
       project: lab
-      source:
-        repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
-        targetRevision: main
-        path: '{{ .path.path }}'
+      sources:
+        - repoURL: ghcr.io/devops-canary/charts
+          chart: rssb-app
+          targetRevision: '{{ .chart.version }}'
+          helm:
+            releaseName: '{{ index .path.segments 1 }}'
+            valueFiles:
+              - '$values/{{ .path.path }}/values.yaml'
+        - repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
+          targetRevision: main
+          ref: values
+        - repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
+          targetRevision: main
+          path: '{{ .path.path }}/secrets'
       destination:
         server: https://kubernetes.default.svc
-        namespace: '{{ .path.basename }}'
+        # A namespace per product per environment: products never collide on
+        # names, and quotas, RBAC and network policies can be set per product.
+        namespace: '{{ index .path.segments 1 }}-{{ .path.basename }}'
       syncPolicy:
         automated:
           prune: true    # objects deleted from Git are deleted from the cluster
           selfHeal: true # manual kubectl edits are reverted to what Git says
         # A failed sync is not retried for the same commit unless asked to.
-        # Retry with backoff so transient failures (e.g. the DB still starting
-        # when migrations run) recover without a human.
+        # Retry with backoff so transient failures (e.g. the database not
+        # accepting connections yet when migrations run) recover without a human.
         retry:
           limit: 5
           backoff:
@@ -47,6 +64,9 @@ spec:
           - CreateNamespace=true
         managedNamespaceMetadata:
           labels:
+            # Selected on by environment-wide policies (quotas, network walls).
+            product: '{{ index .path.segments 1 }}'
+            env: '{{ .path.basename }}'
             # Pod Security Admission: reject pods that run as root, escalate
             # privileges, or keep Linux capabilities.
             pod-security.kubernetes.io/enforce: restricted
