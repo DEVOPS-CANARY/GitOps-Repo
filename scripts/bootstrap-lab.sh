@@ -9,12 +9,16 @@
 # Options (environment variables):
 #   TEAM_SECRETS=../team-secrets   path to your clone of DEVOPS-CANARY/team-secrets
 #   BRANCH=main                    GitOps branch this cluster follows (asked if unset)
+#   WAIT_MINUTES=20                how long to wait for each component to start
 #
 # Safe to re-run: every step either applies the same thing again or skips.
 set -euo pipefail
 
 REPO_SSH="git@github.com:DEVOPS-CANARY/GitOps-Repo.git"
 TEAM_SECRETS="${TEAM_SECRETS:-../team-secrets}"
+# A fresh node downloads every image itself; Argo CD's (220 MB) took 13 minutes
+# per node through the office proxy.
+WAIT_MINUTES="${WAIT_MINUTES:-20}"
 GH_USER="${GH_USER:-$(git config user.name 2>/dev/null | tr -cs 'A-Za-z0-9' '-' | tr 'A-Z' 'a-z' | sed 's/-$//')}"
 KEY="$HOME/.ssh/argocd-${GH_USER:-lab}-gitops"
 
@@ -25,13 +29,14 @@ fingerprint() { openssl x509 -noout -fingerprint -sha256 | cut -d= -f2; }
 # Wait for a rollout; on timeout, show WHY (pending, image pull, crash) instead
 # of a bare "timed out". Usage: wait_ready <namespace> <kind/name> <pod-selector>
 wait_ready() {
-  if ! kubectl -n "$1" rollout status "$2" --timeout=300s >/dev/null; then
-    echo; echo "   $2 is not ready after 5 minutes. Pod status:"
+  echo "   waiting for $2 (first install downloads images: can take a while)"
+  if ! kubectl -n "$1" rollout status "$2" --timeout="${WAIT_MINUTES}m" >/dev/null; then
+    echo; echo "   $2 is not ready after $WAIT_MINUTES minutes. Pod status:"
     kubectl -n "$1" get pods -l "$3" -o wide | sed 's/^/     /'
     echo "   Recent events:"
     kubectl -n "$1" get events --sort-by=.lastTimestamp       --field-selector involvedObject.kind=Pod 2>/dev/null | grep -i "${2#*/}" | tail -8 | sed 's/^/     /'
     die "fix the cause above, then re-run this script (it is safe to re-run).
-   Common causes: slow first image download (just re-run), ImagePullBackOff
+   Common causes: very slow image download (re-run, or WAIT_MINUTES=40), ImagePullBackOff
    (network/DNS/proxy to docker.io or quay.io), Pending (cluster too small:
    minikube start --cpus 2 --memory 4096)"
   fi
