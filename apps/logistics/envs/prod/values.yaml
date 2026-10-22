@@ -5,7 +5,7 @@
 # Shared settings: ../../values.yaml. Image digests are written by CI.
 
 chart:
-  version: 0.2.1 # rssb-app chart version for this environment (read by Argo CD)
+  version: 0.3.0 # rssb-app chart version for this environment (read by Argo CD)
 
 global:
   host: logistics.local
