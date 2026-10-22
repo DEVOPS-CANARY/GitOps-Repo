@@ -14,7 +14,7 @@ components:
   backend:
     image:
       repository: ghcr.io/devops-canary/logistics-backend
-      digest: sha256:a318dfddf1f9beae569cf1671d1c3ffb5453316e3acf2efcf4912bd38872459a # main@08ad0a3 tree-e3113dbb
+      digest: sha256:bee5e3b7248bc6cacd5ac879fc19f4fa5df87cfbd9c0619de8f57732b30983db # main@42a4b63 tree-cffc953d
     env:
       ALLOWED_ORIGINS: http://logistics.local
       # Required in practice: the app passes these straight to jsonwebtoken,
@@ -26,5 +26,5 @@ components:
   frontend:
     image:
       repository: ghcr.io/devops-canary/logistics-frontend
-      digest: sha256:38eccfdb104448a113a1fb9165aa462b4e1ba38aad6d233fc662ba90b331b46b # main@08ad0a3 tree-e3113dbb
+      digest: sha256:c660a51efd3668a1fcf95bd351229fd4524a7459a4bfc44102f8fa3e0ba24ca2 # main@42a4b63 tree-cffc953d
     replicas: 2
