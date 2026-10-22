@@ -7,7 +7,9 @@ cluster match it; nobody runs `kubectl apply` for apps.
 bootstrap/                 applied once per cluster (scripts/bootstrap-lab.sh)
   argocd/                  Argo CD, pinned release
   sealed-secrets/          Sealed Secrets controller + its public sealing cert
-  argo-config/             AppProject "lab" + the ApplicationSet
+  argo-config/             AppProjects "lab" and "platform", the ApplicationSet,
+                           and the platform Applications (Gateway API, Traefik)
+platform/traefik/          Traefik settings: the cluster's entry point
 apps/<product>/
   values.yaml              what is the same in every environment (rssb-app chart)
   envs/<env>/              uat, staging, prod
@@ -29,6 +31,19 @@ Apps are rendered by the platform chart
 the chart two values files: the product's shared `values.yaml`, then the env's
 own on top. An env file holds only what differs, so a setting can't be changed
 in UAT and forgotten in prod.
+
+**One entry point for every app:** Traefik, as a
+[Gateway API](https://gateway-api.sigs.k8s.io/) controller, runs the shared Gateway
+`gateway/public`. The chart gives each exposed app an `HTTPRoute` on its env's host
+(e.g. `uat.logistics.local`: `/` to the frontend, `/api` to the backend). Apps never
+name Traefik, so it can be replaced by another Gateway API implementation. Only
+namespaces labelled `product` (app namespaces) can attach routes. To try it:
+```sh
+kubectl -n gateway port-forward svc/traefik 18080:80
+curl -H 'Host: uat.logistics.local' http://127.0.0.1:18080/login
+```
+Apps on rssb-app 0.2.x still use ingress-nginx (the minikube addon) until they move
+to 0.3.0.
 
 **Databases live outside the cluster**, as at RSSB, where they run on their own
 VMs. In the lab they run in Docker on your machine (`lab-services/`), and pods
