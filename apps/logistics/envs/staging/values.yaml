@@ -12,7 +12,7 @@ components:
   backend:
     image:
       repository: ghcr.io/devops-canary/logistics-backend
-      digest: sha256:a318dfddf1f9beae569cf1671d1c3ffb5453316e3acf2efcf4912bd38872459a # staging@97ab1da tree-d8459be9
+      digest: sha256:bee5e3b7248bc6cacd5ac879fc19f4fa5df87cfbd9c0619de8f57732b30983db # hotfix/login-subtitle@cf03404 tree-cffc953d
     env:
       ALLOWED_ORIGINS: http://staging.logistics.local
       # Required in practice: the app passes these straight to jsonwebtoken,
@@ -24,5 +24,5 @@ components:
   frontend:
     image:
       repository: ghcr.io/devops-canary/logistics-frontend
-      digest: sha256:425da2c5be0d840c15fb9ac58cc40e4ee0f89460fa8fb486add909945b6fd7b8 # staging@97ab1da tree-d8459be9
+      digest: sha256:c660a51efd3668a1fcf95bd351229fd4524a7459a4bfc44102f8fa3e0ba24ca2 # hotfix/login-subtitle@cf03404 tree-cffc953d
     replicas: 1
