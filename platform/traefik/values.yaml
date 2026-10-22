@@ -47,9 +47,16 @@ ports:
     expose:
       default: false # no TLS in the lab; where RSSB terminates TLS is an open question
 
-# The dashboard is off: it would be one more thing to protect.
+# Read-only dashboard for admins, on Traefik's internal port 8080 ("traefik"
+# entrypoint), which the Service does not expose: it is never on the public
+# Gateway. Open it with kubectl access only:
+#   kubectl -n gateway port-forward deploy/traefik 9000:8080
+#   http://localhost:9000/dashboard/
+# "insecure" = no login on that port, so pods inside the cluster could read the
+# routing config (no secrets, no changes); the L4 network policies close that.
 api:
-  dashboard: false
+  dashboard: true
+  insecure: true
 
 accessLog:
   enabled: true
