@@ -45,6 +45,11 @@ curl -H 'Host: uat.logistics.local' http://127.0.0.1:18080/login
 Swap the host for `staging.logistics.local` or `logistics.local` (prod). On Linux
 you can also skip the port-forward and use `http://$(minikube -p devops-lab ip):30080`.
 
+**Traefik dashboard** (read-only; admins with `kubectl` access only, never on the
+public Gateway): `kubectl -n gateway port-forward deploy/traefik 9000:8080`, then open
+http://localhost:9000/dashboard/. It shows every route, its host and path rule, and
+the pods behind it.
+
 **Databases live outside the cluster**, as at RSSB, where they run on their own
 VMs. In the lab they run in Docker on your machine (`lab-services/`), and pods
 reach them at `host.minikube.internal:15432`. Deleting the cluster doesn't
