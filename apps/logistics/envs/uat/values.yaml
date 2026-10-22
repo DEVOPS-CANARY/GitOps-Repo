@@ -1,52 +1,27 @@
-# Logistics in UAT, deployed with the platform chart rssb-app.
-# Only what differs from the chart's defaults lives here; see
-# DEVOPS-CANARY/helm-charts/charts/rssb-app/values.yaml for the rest.
+# Logistics in UAT. Deployed on every merge to the app's develop branch.
+# Shared settings: ../../values.yaml. Image digests are written by CI.
 
 chart:
   version: 0.2.1 # rssb-app chart version for this environment (read by Argo CD)
 
-partOf: logistics
-
 global:
   host: uat.logistics.local
-  imagePullSecrets: [ghcr-pull]
 
 components:
   backend:
-    type: nestjs
     image:
       repository: ghcr.io/devops-canary/logistics-backend
       digest: sha256:a318dfddf1f9beae569cf1671d1c3ffb5453316e3acf2efcf4912bd38872459a # sha-d5a9ca9 tree-e18abd9c
-    port: 3001
-    # Stays at 1 until Socket.io uses the Redis adapter: with 2+ pods, a client
-    # connected to pod A misses events emitted on pod B (plan A7).
-    replicas: 1
     env:
-      NODE_ENV: production
-      PORT: "3001"
       ALLOWED_ORIGINS: http://uat.logistics.local
       # Required in practice: the app passes these straight to jsonwebtoken,
       # which rejects an undefined issuer, so login fails when they are unset.
+      # Different per environment, so a UAT token is refused by staging and prod.
       JWT_ISSUER: logistics-api-uat
       JWT_AUDIENCE: logistics-web-uat
-    secretRefs: [backend-secrets]
-    ingress:
-      enabled: true
-      path: /api
-      stripPrefix: true
-      longLivedConnections: true # live tracking over Socket.io
-    migration:
-      enabled: true
-      command: [node, node_modules/prisma/build/index.js, migrate, deploy]
 
   frontend:
-    type: nextjs
     image:
       repository: ghcr.io/devops-canary/logistics-frontend
       digest: sha256:38eccfdb104448a113a1fb9165aa462b4e1ba38aad6d233fc662ba90b331b46b # sha-d5a9ca9 tree-e18abd9c
-    port: 3000
     replicas: 2
-    probes:
-      startup: { path: /login }
-      liveness: { path: /login }
-      readiness: { path: /login }

@@ -1,0 +1,41 @@
+# Logistics: what is the same in every environment, deployed with the platform
+# chart rssb-app. Each environment adds envs/<env>/values.yaml on top (Helm
+# merges maps key by key; a list in the env file replaces the whole list).
+#
+# Here: how the app is built and wired. In the env files: the chart version,
+# which image runs (repository + digest, written by CI), the host and the
+# settings that differ per environment.
+# Chart defaults: DEVOPS-CANARY/helm-charts/charts/rssb-app/values.yaml
+
+partOf: logistics
+
+global:
+  imagePullSecrets: [ghcr-pull]
+
+components:
+  backend:
+    type: nestjs
+    port: 3001
+    # Stays at 1 until Socket.io uses the Redis adapter: with 2+ pods, a client
+    # connected to pod A misses events emitted on pod B (plan A7).
+    replicas: 1
+    env:
+      NODE_ENV: production
+      PORT: "3001"
+    secretRefs: [backend-secrets]
+    ingress:
+      enabled: true
+      path: /api
+      stripPrefix: true
+      longLivedConnections: true # live tracking over Socket.io
+    migration:
+      enabled: true
+      command: [node, node_modules/prisma/build/index.js, migrate, deploy]
+
+  frontend:
+    type: nextjs
+    port: 3000
+    probes:
+      startup: { path: /login }
+      liveness: { path: /login }
+      readiness: { path: /login }

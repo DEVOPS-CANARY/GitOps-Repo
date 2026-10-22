@@ -4,8 +4,10 @@
 # Adding a product or an environment is adding a folder; no Argo config changes.
 #
 # Each Application has three sources:
-#   1. the platform chart rssb-app, at the version the values file pins (chart.version)
-#   2. this repo, referenced as $values so the chart can read the values file
+#   1. the platform chart rssb-app, at the version the env's values file pins
+#      (chart.version), with two values files: the product's shared
+#      apps/<product>/values.yaml, then the env's own file on top
+#   2. this repo, referenced as $values so the chart can read those files
 #   3. the secrets/ folder next to the values file (sealed secrets, plain YAML)
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -35,6 +37,7 @@ spec:
           helm:
             releaseName: '{{ index .path.segments 1 }}'
             valueFiles:
+              - '$values/apps/{{ index .path.segments 1 }}/values.yaml'
               - '$values/{{ .path.path }}/values.yaml'
         - repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
           targetRevision: main

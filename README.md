@@ -8,11 +8,13 @@ bootstrap/                 applied once per cluster (scripts/bootstrap-lab.sh)
   argocd/                  Argo CD, pinned release
   sealed-secrets/          Sealed Secrets controller + its public sealing cert
   argo-config/             AppProject "lab" + the ApplicationSet
-apps/<product>/envs/<env>/
-  values.yaml              chart version, image digests, config, host (rssb-app chart)
-  secrets/                 sealed secrets for this product in this environment
+apps/<product>/
+  values.yaml              what is the same in every environment (rssb-app chart)
+  envs/<env>/              uat, staging, prod
+    values.yaml            chart version, image digests, host, per-env settings
+    secrets/               sealed secrets for this product in this environment
 lab-services/compose.yaml  LAB ONLY: databases in Docker, outside the cluster
-scripts/                   bootstrap-lab.sh, lab-services.sh
+scripts/                   bootstrap-lab.sh, lab-services.sh, seal-secret.sh
 ```
 
 The ApplicationSet turns every `apps/<product>/envs/<env>/values.yaml` into an
@@ -23,7 +25,10 @@ set per product.
 
 Apps are rendered by the platform chart
 [`rssb-app`](https://github.com/DEVOPS-CANARY/helm-charts) at the version in
-`chart.version`, so there is no Kubernetes YAML to copy per app.
+`chart.version`, so there is no Kubernetes YAML to copy per app. Argo CD gives
+the chart two values files: the product's shared `values.yaml`, then the env's
+own on top. An env file holds only what differs, so a setting can't be changed
+in UAT and forgotten in prod.
 
 **Databases live outside the cluster**, as at RSSB, where they run on their own
 VMs. In the lab they run in Docker on your machine (`lab-services/`), and pods
@@ -86,21 +91,35 @@ kubectl apply -k bootstrap/argo-config
 ## Deploying
 - **UAT:** CI commits the new image digest to `apps/<product>/envs/uat/values.yaml` on
   every merge to the app's `develop` branch.
-- **Staging:** promotion copies the digest already tested in UAT (no rebuild).
+- **Staging:** on every merge to the app's `staging` branch, CI finds the image
+  already built for UAT (same content, so same `tree-` tag) and commits its digest
+  to `envs/staging/values.yaml`. Nothing is rebuilt.
+- **Prod:** the app's approved *Release* workflow, run on `main`, commits the
+  digest that Staging runs to `envs/prod/values.yaml`.
 - **Rollback:** `git revert` the commit that changed the digest.
 
+**Changing `bootstrap/argo-config`:** Argo CD does not manage its own ApplicationSet,
+so after such a PR is merged, every cluster re-applies it:
+`kubectl apply -k bootstrap/argo-config`, or re-run the bootstrap.
+For a cluster that follows `sandbox/<you>`, merge `main` into that branch first and
+re-run the bootstrap, so the branch is applied, not `main`.
+
 ## Adding a product
-1. `apps/<product>/envs/uat/values.yaml`: copy logistics' and change what differs.
-2. A database: add `<PRODUCT>_UAT_DB_PASSWORD` to `team-secrets/secrets/lab-services.yaml`
-   and re-run `./scripts/lab-services.sh`.
-3. `apps/<product>/envs/uat/secrets/`: its sealed secrets, for namespace `<product>-uat`.
+1. `apps/<product>/values.yaml` and `apps/<product>/envs/<env>/values.yaml`: copy
+   logistics' and change what differs.
+2. A database per env: add `<PRODUCT>_<ENV>_DB_PASSWORD` to
+   `team-secrets/secrets/lab-services.yaml` and re-run `./scripts/lab-services.sh`.
+3. `apps/<product>/envs/<env>/secrets/`: its sealed secrets (below).
 
 ## Secrets
-Never commit a plain Secret. Seal it with the public cert:
+Never commit a plain Secret. Pipe `KEY=VALUE` lines into `scripts/seal-secret.sh`,
+which seals them with the public cert and adds the sync wave (so the secret exists
+before the migration Job and the pods that use it):
 ```sh
-kubectl create secret generic NAME -n <product>-<env> --from-literal=KEY=VALUE --dry-run=client -o yaml \
-  | kubeseal --cert bootstrap/sealed-secrets/pub-cert.pem --format yaml > NAME.sealed.yaml
+printf 'JWT_SECRET=%s\n' "$(openssl rand -hex 32)" \
+  | ./scripts/seal-secret.sh <product> <env> backend-secrets
 ```
-Only the controller in the cluster can decrypt it, and only for that name and
-namespace. Add `argocd.argoproj.io/sync-wave: "-2"` so it exists before the
-migration Job and the pods that use it.
+Only the controller in the cluster can decrypt it, and only as that name in
+namespace `<product>-<env>`. A file sealed for UAT is useless in prod. The script's
+header shows how to seal the GHCR pull secret. Check a file against your cluster
+with `kubeseal --validate --controller-namespace kube-system < FILE`.
