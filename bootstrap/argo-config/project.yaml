@@ -1,5 +1,5 @@
 # Fences what lab apps may do: only this repo and the platform charts as
-# sources, only <product>-uat and <product>-staging namespaces as destinations,
+# sources, only <product>-uat, -staging and -prod namespaces as destinations,
 # and no cluster-scoped objects except the Namespace that CreateNamespace makes.
 # A mistaken path cannot touch kube-system, argocd or another team's namespace.
 apiVersion: argoproj.io/v1alpha1
@@ -16,6 +16,8 @@ spec:
       namespace: '*-uat'
     - server: https://kubernetes.default.svc
       namespace: '*-staging'
+    - server: https://kubernetes.default.svc
+      namespace: '*-prod'
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace

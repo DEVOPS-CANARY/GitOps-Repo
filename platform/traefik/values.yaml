@@ -1,0 +1,77 @@
+# Traefik: the cluster's entry point, configured as a Gateway API controller.
+# Chart: traefik/traefik, pinned in bootstrap/argo-config/platform.yaml.
+# Chart defaults: https://github.com/traefik/traefik-helm-chart/blob/v41.7.1/traefik/values.yaml
+#
+# Apps never reference Traefik. They attach HTTPRoutes to the Gateway
+# "gateway/public" (rssb-app chart), so Traefik can be swapped for another
+# Gateway API implementation without touching any app.
+
+# Gateway API only: no Ingress objects, no Traefik-specific routing objects.
+providers:
+  kubernetesGateway:
+    enabled: true
+  kubernetesIngress:
+    enabled: false
+  kubernetesCRD:
+    enabled: false
+ingressClass:
+  enabled: false
+
+gatewayClass:
+  name: traefik
+
+# The one shared entry point. Only app namespaces (labelled "product" by the
+# ApplicationSet) may attach routes to it; anything else is ignored.
+gateway:
+  name: public
+  listeners:
+    web:
+      port: 8000 # Traefik's "web" entrypoint (ports.web below)
+      protocol: HTTP
+      namespacePolicy:
+        from: Selector
+        selector:
+          matchExpressions:
+            - key: product
+              operator: Exists
+
+# LAB: NodePort, reachable at <node IP>:30080 or through kubectl port-forward.
+# At RSSB: type LoadBalancer, given an address by MetalLB, behind FortiADC.
+service:
+  spec:
+    type: NodePort
+ports:
+  web:
+    nodePort: 30080
+  websecure:
+    expose:
+      default: false # no TLS in the lab; where RSSB terminates TLS is an open question
+
+# The dashboard is off: it would be one more thing to protect.
+api:
+  dashboard: false
+
+accessLog:
+  enabled: true
+
+# Two replicas on different nodes: losing a node or a rollout never takes the
+# entry point down.
+deployment:
+  replicas: 2
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: traefik
+        app.kubernetes.io/instance: traefik-gateway
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
