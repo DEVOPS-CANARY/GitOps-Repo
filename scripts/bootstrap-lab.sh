@@ -144,4 +144,8 @@ cat <<EOF
    Argo CD UI:
      kubectl port-forward -n argocd svc/argocd-server 8080:443
      open https://localhost:8080   user: admin   password: $pw
+
+   The apps, through Traefik (the Gateway), once Argo CD has synced them:
+     kubectl -n gateway port-forward svc/traefik 18080:80
+     curl -H 'Host: uat.logistics.local' http://127.0.0.1:18080/login
 EOF

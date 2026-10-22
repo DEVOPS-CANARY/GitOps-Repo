@@ -42,8 +42,8 @@ namespaces labelled `product` (app namespaces) can attach routes. To try it:
 kubectl -n gateway port-forward svc/traefik 18080:80
 curl -H 'Host: uat.logistics.local' http://127.0.0.1:18080/login
 ```
-Apps on rssb-app 0.2.x still use ingress-nginx (the minikube addon) until they move
-to 0.3.0.
+Swap the host for `staging.logistics.local` or `logistics.local` (prod). On Linux
+you can also skip the port-forward and use `http://$(minikube -p devops-lab ip):30080`.
 
 **Databases live outside the cluster**, as at RSSB, where they run on their own
 VMs. In the lab they run in Docker on your machine (`lab-services/`), and pods
@@ -58,10 +58,19 @@ yours can't affect anyone else's. The only shared thing is this repo's `main`.
 **Before you start:**
 - You have `kubectl`, `docker`, `git`, `openssl` and `sops`, and you are a member of
   `team-secrets` (see its README).
-- A running minikube with an ingress controller:
+- A running minikube (no ingress addon: Argo CD installs Traefik):
   ```sh
   minikube start -p devops-lab --cpus 4 --memory 6144
-  minikube -p devops-lab addons enable ingress
+  ```
+  Already have the ingress addon from an earlier setup? Nothing uses it any more.
+  Disabling the addon doesn't remove it on a multi-node minikube, so also delete
+  what it installed (the webhook first, or creating any Ingress would fail):
+  ```sh
+  minikube -p devops-lab addons disable ingress
+  kubectl delete validatingwebhookconfiguration ingress-nginx-admission --ignore-not-found
+  kubectl delete ingressclass nginx --ignore-not-found
+  kubectl delete clusterrole,clusterrolebinding -l app.kubernetes.io/name=ingress-nginx
+  kubectl delete namespace ingress-nginx --ignore-not-found
   ```
   One node is enough for the lab. Add `--nodes 3` to rehearse node failures; on
   some Linux hosts multi-node minikube has pod networking problems.
