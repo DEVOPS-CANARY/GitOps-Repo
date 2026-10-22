@@ -5,3 +5,4 @@ resources:
   - project.yaml
   - applicationset.yaml
   - charts-repo.yaml
+  - platform.yaml
