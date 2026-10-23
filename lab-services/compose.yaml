@@ -25,6 +25,32 @@ services:
       retries: 10
     restart: unless-stopped
 
+  redis:
+    image: redis:8.10.2-alpine3.23@sha256:0bf6577d7774e592b29d093e3ac9390eb91e13d72c21e506afce736de5e0eeb0
+    user: redis # the whole container, not just the server, runs unprivileged
+    # Users live in /data/users.acl (password hashes only), written by
+    # scripts/lab-services.sh from team-secrets. Until its first run, only the
+    # default user exists, without a password, reachable on LAB_BIND only.
+    command:
+      - sh
+      - -c
+      - >-
+        [ -f /data/users.acl ] || echo 'user default on nopass ~* &* +@all' > /data/users.acl;
+        exec redis-server --aclfile /data/users.acl --appendonly yes
+    ports:
+      # 16379, not 6379, for the same reason as Postgres.
+      - ${LAB_BIND:-127.0.0.1}:16379:6379
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      # Answers PONG before the users are loaded, NOAUTH after: both mean "up".
+      test: ["CMD-SHELL", "redis-cli ping 2>&1 | grep -qE 'PONG|NOAUTH'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
 volumes:
-  # Survives `docker compose down` and deleting the cluster; `down -v` wipes it.
+  # Survive `docker compose down` and deleting the cluster; `down -v` wipes them.
   postgres-data:
+  redis-data:
