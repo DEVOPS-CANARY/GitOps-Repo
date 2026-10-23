@@ -17,8 +17,13 @@
 #   printf '.dockerconfigjson={"auths":{"ghcr.io":{"auth":"%s"}}}\n' "$(printf '%s' "you:$t" | base64 -w0)" \
 #     | ./scripts/seal-secret.sh logistics staging ghcr-pull kubernetes.io/dockerconfigjson
 #
+#   # Add a key to an existing sealed secret, keeping the others as they are
+#   # (sealed values can't be read back, so re-sealing all of them isn't possible)
+#   printf 'REDIS_URL=%s\n' "$url" | MERGE=1 ./scripts/seal-secret.sh logistics uat backend-secrets
+#
 # Options (environment variables):
 #   KUBESEAL=kubeseal   path to kubeseal (default: on PATH, or ~/bin/kubeseal.exe)
+#   MERGE=1             add or replace the given keys in the existing file
 set -euo pipefail
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -50,14 +55,25 @@ secret="$(
   [ "$count" -gt 0 ] || die "no KEY=VALUE lines on stdin"
 )"
 
+ann='    argocd.argoproj.io/sync-wave: "-2" # before the migration Job (-1) and the apps (0)'
+if [ "${MERGE:-}" = 1 ]; then
+  [ -f "$out" ] || die "MERGE=1 but $out doesn't exist yet"
+  # kubeseal rewrites the file: existing encrypted values are kept as they are.
+  "$KUBESEAL" --cert bootstrap/sealed-secrets/pub-cert.pem --format yaml --merge-into "$out" <<<"$secret"
+  tmp="$(tr -d '\r' <"$out" | sed -E "s|^    argocd.argoproj.io/sync-wave: \"-2\"\$|$ann|")"
+  printf '%s\n' "$tmp" >"$out"
+  echo "merged into $out (Secret $name in namespace $namespace, keys: $(grep -cE '^    [^ ]+: Ag' "$out"))"
+  exit 0
+fi
+
 mkdir -p "$(dirname "$out")"
 # Seal with the repo's public cert (no cluster access needed), then add the
 # sync wave Argo CD needs: secrets before the migration Job (-1) and the apps (0).
 "$KUBESEAL" --cert bootstrap/sealed-secrets/pub-cert.pem --format yaml <<<"$secret" \
   | tr -d '\r' \
   | grep -v 'creationTimestamp: null' \
-  | awk '{ print } !done && /^  namespace: / {
+  | awk -v ann="$ann" '{ print } !done && /^  namespace: / {
       print "  annotations:"
-      print "    argocd.argoproj.io/sync-wave: \"-2\" # before the migration Job (-1) and the apps (0)"
+      print ann
       done = 1 }' >"$out"
 echo "wrote $out (Secret $name in namespace $namespace, keys: $(grep -cE '^    [^ ]+: Ag' "$out"))"
