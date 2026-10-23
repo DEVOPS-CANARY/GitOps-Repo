@@ -11,6 +11,9 @@
 #   <PRODUCT>_<ENV>_REDIS_PASSWORD  Redis user <product>_<env>, allowed only
 #                                   keys and channels starting <product>:<env>:
 #   REDIS_ADMIN_PASSWORD            Redis admin (the default user)
+#   <PRODUCT>_<ENV>_KAFKA_PASSWORD  Kafka user <product>_<env>, allowed only
+#                                   topics and consumer groups <env>.<product>.*
+# Kafka topics come from lab-services/kafka-topics.txt.
 #
 # Options (environment variables):
 #   TEAM_SECRETS=../team-secrets   path to your clone of DEVOPS-CANARY/team-secrets
@@ -56,6 +59,7 @@ set +a
 "${COMPOSE[@]}" up -d --wait --quiet-pull >/dev/null
 ok "postgres running, published on $LAB_BIND:15432 (pods: host.minikube.internal:15432)"
 ok "redis running, published on $LAB_BIND:16379 (pods: host.minikube.internal:16379)"
+ok "kafka running, published on $LAB_BIND:19092 (pods: host.minikube.internal:19092)"
 
 # One role + database per <PRODUCT>_<ENV>_DB_PASSWORD. Values go in on stdin
 # (not the command line), and \gexec only creates what doesn't exist yet.
@@ -96,4 +100,31 @@ reload="$(printf '%s\n' "$REDIS_ADMIN_PASSWORD" \
   | "${COMPOSE[@]}" exec -T redis redis-cli --no-auth-warning --askpass ACL LOAD 2>&1)"
 [ "$(tail -n1 <<<"$reload")" = "OK" ] || die "Redis did not load the users: $(tail -n1 <<<"$reload")"
 for name in "${users[@]}"; do ok "redis user: $name (keys and channels ${name/_/:}:*)"; done
+
+# Kafka: one user per <PRODUCT>_<ENV>_KAFKA_PASSWORD, allowed only topics and
+# consumer groups starting <env>.<product>. (nothing is allowed by default).
+# Admin commands use the broker's in-container admin listener, which needs no
+# password. The password goes in on stdin and only reaches the tool inside the
+# container.
+kafka() { MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" exec -T kafka "/opt/kafka/bin/$1" --bootstrap-server 127.0.0.1:9094 "${@:2}"; }
+for var in $(compgen -e | grep -E '^[A-Z0-9]+_[A-Z0-9]+_KAFKA_PASSWORD$' || true); do
+  name="$(tr 'A-Z' 'a-z' <<<"${var%_KAFKA_PASSWORD}")"     # logistics_uat
+  product="${name%%_*}" env="${name#*_}"
+  prefix="$env.$product."                                # uat.logistics.
+  printf '%s\n' "${!var}" | MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" exec -T kafka sh -c \
+    'read -r pw; exec /opt/kafka/bin/kafka-configs.sh --bootstrap-server 127.0.0.1:9094 --alter --entity-type users --entity-name "$0" --add-config "SCRAM-SHA-512=[iterations=8192,password=$pw]"' \
+    "$name" >/dev/null
+  kafka kafka-acls.sh --add --allow-principal "User:$name" --operation Read --operation Write \
+    --operation Describe --topic "$prefix" --resource-pattern-type prefixed >/dev/null
+  kafka kafka-acls.sh --add --allow-principal "User:$name" --operation Read \
+    --group "$prefix" --resource-pattern-type prefixed >/dev/null
+  topics=()
+  while read -r p topic partitions; do
+    [ "$p" = "$product" ] || continue
+    kafka kafka-topics.sh --create --if-not-exists --topic "$prefix$topic" \
+      --partitions "$partitions" --replication-factor 1 >/dev/null
+    topics+=("$prefix$topic")
+  done < <(grep -vE '^\s*(#|$)' lab-services/kafka-topics.txt)
+  ok "kafka user: $name (topics and groups $prefix*; topics: ${topics[*]:-none})"
+done
 

@@ -50,7 +50,51 @@ services:
       retries: 10
     restart: unless-stopped
 
+  kafka:
+    image: apache/kafka:4.3.2@sha256:852a0d49fc4e656b022e7f23785411802c9a088c78a7c5e39f33969de9c227a7
+    # Single node (broker + controller, KRaft), running as the image's
+    # unprivileged appuser. Two listeners:
+    #   CLIENT  :9092 (published as LAB_BIND:19092), username + password
+    #           (SCRAM-SHA-512); each app environment only sees what its ACLs allow
+    #   ADMIN   127.0.0.1:9094 inside the container only: no password, reachable
+    #           through `docker compose exec` (scripts/lab-services.sh)
+    environment:
+      CLUSTER_ID: 8HVFlbKxRBGN5b0n_WvfHQ
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: ADMIN://127.0.0.1:9094,CLIENT://0.0.0.0:9092,CONTROLLER://localhost:9093
+      # The address clients are told to use: pods reach this machine there.
+      KAFKA_ADVERTISED_LISTENERS: ADMIN://127.0.0.1:9094,CLIENT://host.minikube.internal:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: ADMIN:PLAINTEXT,CLIENT:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: ADMIN
+      KAFKA_SASL_ENABLED_MECHANISMS: SCRAM-SHA-512
+      KAFKA_LISTENER_NAME_CLIENT_SCRAM___SHA___512_SASL_JAAS_CONFIG: org.apache.kafka.common.security.scram.ScramLoginModule required;
+      # Nothing is allowed unless an ACL allows it. The admin and controller
+      # listeners have no login (principal ANONYMOUS), hence super user.
+      KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer
+      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
+      KAFKA_SUPER_USERS: User:ANONYMOUS
+      KAFKA_LOG_DIRS: /var/lib/kafka/data # default is /tmp: lost on restart
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_HEAP_OPTS: -Xmx384m -Xms256m # ~300 MB of RAM: laptops also run the cluster
+    ports:
+      - ${LAB_BIND:-127.0.0.1}:19092:9092
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "9094"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
 volumes:
   # Survive `docker compose down` and deleting the cluster; `down -v` wipes them.
   postgres-data:
   redis-data:
+  kafka-data:
