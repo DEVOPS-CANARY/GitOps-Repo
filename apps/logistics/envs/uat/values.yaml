@@ -19,6 +19,9 @@ components:
       # Different per environment, so a UAT token is refused by staging and prod.
       JWT_ISSUER: logistics-api-uat
       JWT_AUDIENCE: logistics-web-uat
+      # Redis (REDIS_URL is sealed in backend-secrets): every key and channel
+      # starts with this, the only prefix this environment's Redis user may use.
+      REDIS_KEY_PREFIX: "logistics:uat:"
 
   frontend:
     image:
