@@ -22,6 +22,10 @@ components:
       # Redis (REDIS_URL is sealed in backend-secrets): every key and channel
       # starts with this, the only prefix this environment's Redis user may use.
       REDIS_KEY_PREFIX: "logistics:uat:"
+      # Kafka: this user may only use topics and consumer groups starting with
+      # the prefix (KAFKA_PASSWORD is sealed in backend-secrets).
+      KAFKA_USERNAME: logistics_uat
+      KAFKA_TOPIC_PREFIX: uat.logistics.
     # 2 replicas: WebSocket events and rate limits are shared through Redis
     # (the image has the Redis adapter since develop@0416c8b). The chart adds a
     # PodDisruptionBudget, so a node drain never takes both down.

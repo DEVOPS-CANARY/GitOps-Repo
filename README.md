@@ -50,12 +50,16 @@ public Gateway): `kubectl -n gateway port-forward deploy/traefik 9000:8080`, the
 http://localhost:9000/dashboard/. It shows every route, its host and path rule, and
 the pods behind it.
 
-**Databases and Redis live outside the cluster**, as at RSSB, where they run on
-their own VMs. In the lab they run in Docker on your machine (`lab-services/`),
-and pods reach them at `host.minikube.internal:15432` (Postgres) and `:16379`
-(Redis). Each app environment has its own Postgres database and its own Redis
-user, which may only use keys and channels starting `<app>:<env>:`. Redis
-"databases" don't separate pub/sub, so the separation is per user. Deleting the cluster doesn't
+**Databases, Redis and Kafka live outside the cluster**, as at RSSB, where they run
+on their own VMs. In the lab they run in Docker on your machine (`lab-services/`), and
+pods reach them at `host.minikube.internal`: `:15432` (Postgres), `:16379` (Redis),
+`:19092` (Kafka). Each app environment gets its own:
+- Postgres database;
+- Redis user, which may only use keys and channels starting `<app>:<env>:` (Redis
+  "databases" don't separate pub/sub, so the separation is per user);
+- Kafka user (SCRAM), which may only use topics and consumer groups starting
+  `<env>.<app>.`. Nothing is allowed by default. Topics are declared in
+  `lab-services/kafka-topics.txt`. Deleting the cluster doesn't
 touch the data.
 
 ## Your own lab cluster (teammates start here)

@@ -22,6 +22,9 @@ components:
     env:
       NODE_ENV: production
       PORT: "3001"
+      # Kafka (lab: in lab-services, outside the cluster). The username, topic
+      # prefix and password (sealed) are per environment.
+      KAFKA_BROKERS: host.minikube.internal:19092
     secretRefs: [backend-secrets]
     ingress:
       enabled: true
