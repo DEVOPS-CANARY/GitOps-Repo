@@ -5,9 +5,12 @@
 # Usage (from the root of GitOps-Repo, with kubectl pointing at your minikube):
 #   ./scripts/lab-services.sh
 #
-# Passwords come from team-secrets/secrets/lab-services.yaml: each
-# <PRODUCT>_<ENV>_DB_PASSWORD there becomes database and role <product>_<env>.
-# They are decrypted into this process only, never written to disk.
+# Passwords come from team-secrets/secrets/lab-services.yaml, decrypted into
+# this process only, never written to disk in plain text:
+#   <PRODUCT>_<ENV>_DB_PASSWORD     Postgres database + role <product>_<env>
+#   <PRODUCT>_<ENV>_REDIS_PASSWORD  Redis user <product>_<env>, allowed only
+#                                   keys and channels starting <product>:<env>:
+#   REDIS_ADMIN_PASSWORD            Redis admin (the default user)
 #
 # Options (environment variables):
 #   TEAM_SECRETS=../team-secrets   path to your clone of DEVOPS-CANARY/team-secrets
@@ -52,6 +55,7 @@ set +a
 
 "${COMPOSE[@]}" up -d --wait --quiet-pull >/dev/null
 ok "postgres running, published on $LAB_BIND:15432 (pods: host.minikube.internal:15432)"
+ok "redis running, published on $LAB_BIND:16379 (pods: host.minikube.internal:16379)"
 
 # One role + database per <PRODUCT>_<ENV>_DB_PASSWORD. Values go in on stdin
 # (not the command line), and \gexec only creates what doesn't exist yet.
@@ -69,3 +73,27 @@ REVOKE ALL ON DATABASE :"name" FROM PUBLIC;
 SQL
   ok "database + role: $name"
 done
+
+# Redis users: one per <PRODUCT>_<ENV>_REDIS_PASSWORD, restricted to its own
+# prefix (environments share this Redis but can't see each other). The file
+# holds SHA-256 hashes, never passwords. Pub/sub isn't separated by Redis
+# "databases", which is why isolation is per user. A pattern subscription
+# must match an allowed pattern literally, hence the extra Socket.io pattern.
+[ -n "${REDIS_ADMIN_PASSWORD:-}" ] || die "REDIS_ADMIN_PASSWORD missing from $SECRETS_FILE"
+sha256() { if command -v sha256sum >/dev/null; then sha256sum; else shasum -a 256; fi | cut -d' ' -f1; }
+acl="user default on #$(printf '%s' "$REDIS_ADMIN_PASSWORD" | sha256) ~* &* +@all"
+users=()
+for var in $(compgen -e | grep -E '^[A-Z0-9]+_[A-Z0-9]+_REDIS_PASSWORD$' || true); do
+  name="$(tr 'A-Z' 'a-z' <<<"${var%_REDIS_PASSWORD}")"   # logistics_uat
+  prefix="${name/_/:}:"                                  # logistics:uat:
+  acl+=$'\n'"user $name on #$(printf '%s' "${!var}" | sha256) resetkeys ~$prefix* resetchannels &$prefix* &${prefix}socket.io#/#* +@all -@dangerous"
+  users+=("$name")
+done
+"${COMPOSE[@]}" exec -T redis sh -c 'cat > /data/users.acl' <<<"$acl"
+# Reload as the admin. The password goes in on stdin. (On the very first run
+# the admin has no password yet; redis-cli says so and runs the command anyway.)
+reload="$(printf '%s\n' "$REDIS_ADMIN_PASSWORD" \
+  | "${COMPOSE[@]}" exec -T redis redis-cli --no-auth-warning --askpass ACL LOAD 2>&1)"
+[ "$(tail -n1 <<<"$reload")" = "OK" ] || die "Redis did not load the users: $(tail -n1 <<<"$reload")"
+for name in "${users[@]}"; do ok "redis user: $name (keys and channels ${name/_/:}:*)"; done
+
