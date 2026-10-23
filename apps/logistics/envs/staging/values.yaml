@@ -37,7 +37,7 @@ components:
   notifications: # the worker: shared settings in ../../values.yaml
     image:
       repository: ghcr.io/devops-canary/logistics-backend
-      digest: sha256:a318dfddf1f9beae569cf1671d1c3ffb5453316e3acf2efcf4912bd38872459a # staging@ce60c2c tree-20779183
+      digest: sha256:e73c3c49ae016077e6b1058ee9f71b4c73eb82c70587c34c9866ab4d7b832367 # staging@333dcb1 tree-fcc53170
     env:
       KAFKA_USERNAME: logistics_staging
       KAFKA_TOPIC_PREFIX: staging.logistics.
