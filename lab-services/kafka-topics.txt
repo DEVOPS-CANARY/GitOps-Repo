@@ -1,0 +1,6 @@
+# Kafka topics, created by scripts/lab-services.sh as <env>.<product>.<topic>
+# for every environment that has a <PRODUCT>_<ENV>_KAFKA_PASSWORD in team-secrets.
+# Partitions cap how many consumers of one group can work in parallel.
+#
+# <product> <topic> <partitions>
+logistics tracking-events 6

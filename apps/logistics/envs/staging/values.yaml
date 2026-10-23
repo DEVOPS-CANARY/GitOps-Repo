@@ -23,6 +23,10 @@ components:
       # Redis (REDIS_URL is sealed in backend-secrets): every key and channel
       # starts with this, the only prefix this environment's Redis user may use.
       REDIS_KEY_PREFIX: "logistics:staging:"
+      # Kafka: this user may only use topics and consumer groups starting with
+      # the prefix (KAFKA_PASSWORD is sealed in backend-secrets).
+      KAFKA_USERNAME: logistics_staging
+      KAFKA_TOPIC_PREFIX: staging.logistics.
 
   frontend:
     image:
