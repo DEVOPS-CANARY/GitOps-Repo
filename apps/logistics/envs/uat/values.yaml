@@ -26,10 +26,6 @@ components:
       # the prefix (KAFKA_PASSWORD is sealed in backend-secrets).
       KAFKA_USERNAME: logistics_uat
       KAFKA_TOPIC_PREFIX: uat.logistics.
-    # 2 replicas: WebSocket events and rate limits are shared through Redis
-    # (the image has the Redis adapter since develop@0416c8b). The chart adds a
-    # PodDisruptionBudget, so a node drain never takes both down.
-    replicas: 2
 
   frontend:
     image:
@@ -37,23 +33,10 @@ components:
       digest: sha256:71146bfaaaa8ae8e784789b3c59465450048c2a714f8834919a4530c27230a8e # develop@3608cf7 tree-fcc53170
     replicas: 2
 
-  # Reads tracking events from Kafka and sends one notification per event
-  # (simulated: recorded as NOTIFICATION_SENT in the audit log). It's the
-  # backend image with another command: CI writes the new digest on every line
-  # naming this image, so the worker always runs the same build as the backend.
-  notifications:
-    type: worker
+  notifications: # the worker: shared settings in ../../values.yaml
     image:
       repository: ghcr.io/devops-canary/logistics-backend
       digest: sha256:e73c3c49ae016077e6b1058ee9f71b4c73eb82c70587c34c9866ab4d7b832367 # develop@3608cf7 tree-fcc53170
-    command: [node, dist/worker.js]
-    secretRefs: [notifications-secrets] # DATABASE_URL + KAFKA_PASSWORD only
     env:
-      NODE_ENV: production
-      KAFKA_BROKERS: host.minikube.internal:19092
       KAFKA_USERNAME: logistics_uat
       KAFKA_TOPIC_PREFIX: uat.logistics.
-      # LAB: each notification "takes" 200 ms, so a burst of events builds a
-      # visible backlog (consumer lag) for the KEDA demo.
-      NOTIFY_DELAY_MS: "200"
-

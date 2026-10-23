@@ -16,9 +16,10 @@ components:
   backend:
     type: nestjs
     port: 3001
-    # Stays at 1 until Socket.io uses the Redis adapter: with 2+ pods, a client
-    # connected to pod A misses events emitted on pod B (plan A7).
-    replicas: 1
+    # 2 replicas: WebSocket events and rate limits are shared through Redis
+    # (readiness rule A7; proven in UAT). The chart adds a PodDisruptionBudget,
+    # so a node drain never takes both down.
+    replicas: 2
     env:
       NODE_ENV: production
       PORT: "3001"
@@ -42,3 +43,19 @@ components:
       startup: { path: /login }
       liveness: { path: /login }
       readiness: { path: /login }
+
+  # Reads tracking events from Kafka and sends one notification per event
+  # (simulated: recorded as NOTIFICATION_SENT in the audit log). It's the
+  # backend image with another command. Each environment pins the digest; CI
+  # writes it on every line naming the backend image, so it matches the backend.
+  notifications:
+    type: worker
+    command: [node, dist/worker.js]
+    secretRefs: [notifications-secrets] # DATABASE_URL + KAFKA_PASSWORD only
+    env:
+      NODE_ENV: production
+      KAFKA_BROKERS: host.minikube.internal:19092
+      # LAB: each notification "takes" 200 ms (stands in for an email or SMS
+      # call), so a burst of events builds visible consumer lag for KEDA.
+      NOTIFY_DELAY_MS: "200"
+
