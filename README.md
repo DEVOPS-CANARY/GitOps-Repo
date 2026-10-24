@@ -8,8 +8,9 @@ bootstrap/                 applied once per cluster (scripts/bootstrap-lab.sh)
   argocd/                  Argo CD, pinned release
   sealed-secrets/          Sealed Secrets controller + its public sealing cert
   argo-config/             AppProjects "lab" and "platform", the ApplicationSet,
-                           and the platform Applications (Gateway API, Traefik)
+                           and the platform Applications (Gateway API, Traefik, KEDA)
 platform/traefik/          Traefik settings: the cluster's entry point
+platform/keda/             KEDA settings: autoscaling on events (e.g. Kafka lag)
 apps/<product>/
   values.yaml              what is the same in every environment (rssb-app chart)
   envs/<env>/              uat, staging, prod
@@ -49,6 +50,11 @@ you can also skip the port-forward and use `http://$(minikube -p devops-lab ip):
 public Gateway): `kubectl -n gateway port-forward deploy/traefik 9000:8080`, then open
 http://localhost:9000/dashboard/. It shows every route, its host and path rule, and
 the pods behind it.
+
+**Autoscaling on events:** KEDA (namespace `keda`) scales a Deployment on the work
+waiting for it, e.g. a Kafka consumer on its lag, not only on CPU. An app asks for it
+in its values file (rssb-app chart); KEDA measures the metric and feeds it to a normal
+HorizontalPodAutoscaler. To see what it is doing: `kubectl get scaledobject,hpa -A`.
 
 **Databases, Redis and Kafka live outside the cluster**, as at RSSB, where they run
 on their own VMs. In the lab they run in Docker on your machine (`lab-services/`), and

@@ -4,19 +4,27 @@
 #
 #   gateway-api   the Gateway API CRDs (Gateway, HTTPRoute, ...), standard channel
 #   traefik       the Gateway API controller, and the shared Gateway "gateway/public"
+#   keda          event-driven autoscaling (e.g. a Kafka consumer on its lag)
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
   name: platform
 spec:
-  description: Shared platform components (entry point and its APIs)
+  description: Shared platform components (entry point, autoscaling)
   sourceRepos:
     - git@github.com:DEVOPS-CANARY/GitOps-Repo.git
     - https://github.com/kubernetes-sigs/gateway-api.git
     - https://traefik.github.io/charts
+    - https://github.com/kedacore/charts.git
   destinations:
     - server: https://kubernetes.default.svc
       namespace: gateway
+    - server: https://kubernetes.default.svc
+      namespace: keda
+    # KEDA's metrics server needs one RoleBinding here, to read the API
+    # server's client-auth settings (standard for any metrics API server).
+    - server: https://kubernetes.default.svc
+      namespace: kube-system
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace
@@ -32,6 +40,10 @@ spec:
       kind: ClusterRoleBinding
     - group: gateway.networking.k8s.io
       kind: GatewayClass
+    - group: apiregistration.k8s.io # KEDA serves the external metrics API
+      kind: APIService
+    - group: admissionregistration.k8s.io # KEDA checks ScaledObjects on create
+      kind: ValidatingWebhookConfiguration
 ---
 # Gateway API v1.6.3: the version Traefik 3.7 supports. Straight from the
 # Kubernetes project's repo at that tag, so an upgrade is one line here.
@@ -93,6 +105,56 @@ spec:
         maxDuration: 3m
     syncOptions:
       - CreateNamespace=true
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: restricted
+        pod-security.kubernetes.io/enforce-version: latest
+---
+# KEDA v2.21.0 (fixes CVE-2026-77524, critical). Apps describe what drives
+# their replica count (e.g. Kafka consumer lag) in a ScaledObject; KEDA
+# measures it and hands the number to a normal HorizontalPodAutoscaler.
+#
+# The chart comes from KEDA's Git repo at the release tag: the same files as
+# its Helm repo, which is on github.io and was unreachable from our network
+# on 24 Oct 2026 (github.com was fine).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keda
+spec:
+  project: platform
+  sources:
+    - repoURL: https://github.com/kedacore/charts.git
+      targetRevision: v2.21.0
+      path: keda
+      helm:
+        releaseName: keda
+        valueFiles:
+          - $values/platform/keda/values.yaml
+    - repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: keda
+  # The operator makes its own TLS certificates and writes their CA into these
+  # two objects at runtime. That is expected, not drift.
+  ignoreDifferences:
+    - group: apiregistration.k8s.io
+      kind: APIService
+      jsonPointers:
+        - /spec/caBundle
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true # the ScaledJob CRD is too large for client-side apply
     managedNamespaceMetadata:
       labels:
         pod-security.kubernetes.io/enforce: restricted
