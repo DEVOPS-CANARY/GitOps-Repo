@@ -1,0 +1,32 @@
+# KEDA: scales Deployments on events (Kafka lag, queue length, ...), not only CPU.
+# Chart: kedacore/charts at tag v2.21.0, pinned in bootstrap/argo-config/platform.yaml.
+# Chart defaults: https://github.com/kedacore/charts/blob/v2.21.0/keda/values.yaml
+#
+# Apps never talk to KEDA. They ship a ScaledObject (the rssb-app chart renders
+# it from the app's values); KEDA measures the metric and drives the HPA.
+
+image:
+  # Tags are fixed by the chart version, so a cached image is always the right
+  # one. The default ("Always") re-pulls on every restart, slow through a proxy.
+  pullPolicy: IfNotPresent
+
+crds:
+  additionalAnnotations:
+    # Never delete KEDA's CRDs automatically: that deletes every ScaledObject
+    # with them, and the apps fall back to a fixed replica count.
+    argocd.argoproj.io/sync-options: Prune=false
+
+rbac:
+  # The default lets KEDA read every object of every kind in the cluster, so it
+  # can scale any custom resource. We only scale Deployments, which it supports
+  # without that rule.
+  enabledCustomScaledRefKinds: false
+
+# Kept at the default, on purpose: the operator may list Secrets in every
+# namespace. A ScaledObject's credentials (e.g. the worker's Kafka password)
+# live in the app's own namespace, and KEDA must read them there. This makes
+# the KEDA operator as sensitive as Argo CD: platform admins only.
+permissions:
+  operator:
+    restrict:
+      secret: false
