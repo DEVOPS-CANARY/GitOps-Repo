@@ -16,7 +16,7 @@ spec:
   sourceRepos:
     - git@github.com:DEVOPS-CANARY/GitOps-Repo.git
     - https://github.com/kubernetes-sigs/gateway-api.git
-    - https://traefik.github.io/charts
+    - https://github.com/traefik/traefik-helm-chart.git
     - https://github.com/kedacore/charts.git
     - ghcr.io/kyverno/charts
   destinations:
@@ -79,6 +79,10 @@ spec:
 # Chart v41.7.1 = Traefik v3.7.14. Later patches (3.7.15, 3.7.16) fix CVEs in
 # ForwardAuth and the ingress-nginx provider, which are not enabled here; move
 # up once a release has been public for two weeks.
+#
+# The chart comes from Traefik's Git repo at the release tag: the same files
+# as its Helm repo, which is on github.io and unreachable from our network
+# (G43). A fresh cluster could not install Traefik at all on 25 Oct.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -86,9 +90,9 @@ metadata:
 spec:
   project: platform
   sources:
-    - repoURL: https://traefik.github.io/charts
-      chart: traefik
-      targetRevision: 41.7.1
+    - repoURL: https://github.com/traefik/traefik-helm-chart.git
+      path: traefik
+      targetRevision: v41.7.1
       helm:
         releaseName: traefik
         skipCrds: true # Traefik's own CRDs: unused, we only use Gateway API
