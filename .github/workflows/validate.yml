@@ -72,13 +72,13 @@ jobs:
             ghcr.io/kyverno/kyverno-cli:v1.19.1 \
             apply /p/require-pinned-images.yaml /p/app-namespace-defaults.yaml \
             --resource /p/tests/resources.yaml --values-file /p/tests/values.yaml \
-            -o /out --table | tee result.txt
+            -o /out --table | tee result.txt || true # exits 1 when a resource fails: expected here
           for pod in bad-tag bad-registry; do
             grep -qiE "$pod.*fail" result.txt || { echo "::error::pod $pod breaks the image rule but was not rejected"; exit 1; }
           done
           if grep -iE 'Pod/good.*fail' result.txt; then echo "::error::the compliant pod was rejected"; exit 1; fi
           if grep -iE '\bfail\b' result.txt | grep -v 'Pod/bad-'; then echo "::error::an unexpected rule failed"; exit 1; fi
-          n=$(grep -c '^kind: NetworkPolicy' generated/*.yaml)
+          n=$(cat generated/*.yaml | grep -c '^kind: NetworkPolicy' || true)
           [ "$n" -ge 5 ] || { echo "::error::expected 5 NetworkPolicies generated for the namespace, got $n"; exit 1; }
           echo "OK: compliant pod passes, non-compliant pods fail, $n network policies + quota + limits generated"
 
