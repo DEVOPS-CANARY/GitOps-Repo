@@ -43,4 +43,7 @@ components:
     env:
       KAFKA_USERNAME: logistics_prod
       KAFKA_TOPIC_PREFIX: prod.logistics.
-
+    autoscaling: # KEDA lag scaling: shared settings in ../../values.yaml
+      kafka:
+        topic: prod.logistics.tracking-events
+        consumerGroup: prod.logistics.notifications
