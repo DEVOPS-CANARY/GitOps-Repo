@@ -40,15 +40,7 @@ components:
     env:
       KAFKA_USERNAME: logistics_uat
       KAFKA_TOPIC_PREFIX: uat.logistics.
-    # KEDA sizes the worker on its consumer group's lag: about one pod per 20
-    # waiting messages, 1 to 6 (the topic has 6 partitions; a 7th consumer
-    # would have none to read). UAT first; moves to the shared file on promotion.
-    autoscaling:
-      enabled: true
-      metric: kafka
-      minReplicas: 1
-      maxReplicas: 6
+    autoscaling: # KEDA lag scaling: shared settings in ../../values.yaml
       kafka:
         topic: uat.logistics.tracking-events
         consumerGroup: uat.logistics.notifications
-        offsetResetPolicy: earliest # the worker reads a new group from the start

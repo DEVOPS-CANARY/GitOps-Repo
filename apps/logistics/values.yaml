@@ -58,4 +58,13 @@ components:
       # LAB: each notification "takes" 200 ms (stands in for an email or SMS
       # call), so a burst of events builds visible consumer lag for KEDA.
       NOTIFY_DELAY_MS: "200"
-
+    # KEDA sizes the worker on its consumer group's lag: about one pod per 20
+    # waiting messages, 1 to 6 (the topic has 6 partitions; a 7th consumer
+    # would have none to read). Each environment names its topic and group.
+    autoscaling:
+      enabled: true
+      metric: kafka
+      minReplicas: 1
+      maxReplicas: 6
+      kafka:
+        offsetResetPolicy: earliest # the worker reads a new group from the start
