@@ -1,0 +1,152 @@
+# Every app namespace (labelled "product" by the ApplicationSet) gets these
+# objects automatically, the moment the namespace exists, and Kyverno keeps
+# them in place (synchronize): a hand edit or deletion is undone.
+#
+#   Network walls   nothing in, nothing out, except: the gateway (Traefik) may
+#                   reach the app's pods; pods in the same namespace may talk
+#                   to each other; DNS; and anything outside the cluster (the
+#                   databases, Redis and Kafka on their VMs). One app can never
+#                   reach another app's pods, nor platform pods.
+#   Quota           a ceiling per namespace, so one app can't starve the others.
+#   LimitRange      defaults for pods that forget to ask (the chart always
+#                   does), so the quota can be enforced on every pod.
+#
+# CLUSTER-SPECIFIC VALUES are the `settings` variable below: the pod and
+# Service address ranges. At RSSB set them to the MicroK8s ranges (by default
+# pods 10.1.0.0/16, Services 10.152.183.0/24). Kept in the policy, not read
+# from a ConfigMap, so the policy needs no lookup and can be tested offline.
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: app-namespace-defaults
+  annotations:
+    policies.kyverno.io/title: Default walls, quota and limits for app namespaces
+spec:
+  evaluation:
+    synchronize:
+      enabled: true
+    generateExisting:
+      enabled: true # existing app namespaces get them too, not only new ones
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [namespaces]
+  matchConditions:
+    - name: is-app-namespace
+      expression: "has(object.metadata.labels) && 'product' in object.metadata.labels"
+  variables:
+    - name: settings
+      expression: >-
+        {
+          "podCIDR": "10.244.0.0/16",
+          "serviceCIDR": "10.96.0.0/12"
+        }
+    - name: ns
+      expression: object.metadata.name
+  generate:
+    - template:
+        interpolate: cel
+        value: |
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: default-deny
+            namespace: (( variables.ns ))
+          spec:
+            podSelector: {}
+            policyTypes: [Ingress, Egress]
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: allow-same-namespace
+            namespace: (( variables.ns ))
+          spec:
+            podSelector: {}
+            policyTypes: [Ingress, Egress]
+            ingress:
+              - from:
+                  - podSelector: {}
+            egress:
+              - to:
+                  - podSelector: {}
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: allow-from-gateway
+            namespace: (( variables.ns ))
+          spec:
+            podSelector: {}
+            policyTypes: [Ingress]
+            ingress:
+              - from:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: gateway
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: allow-dns
+            namespace: (( variables.ns ))
+          spec:
+            podSelector: {}
+            policyTypes: [Egress]
+            egress:
+              - to:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: kube-system
+                    podSelector:
+                      matchLabels:
+                        k8s-app: kube-dns
+                ports:
+                  - { protocol: UDP, port: 53 }
+                  - { protocol: TCP, port: 53 }
+          ---
+          # Databases, Redis and Kafka live outside the cluster (VMs at RSSB,
+          # Docker in the lab): egress to anything that is not a pod or a
+          # Service is allowed. The firewall around those VMs is RSSB's wall.
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: allow-outside-cluster
+            namespace: (( variables.ns ))
+          spec:
+            podSelector: {}
+            policyTypes: [Egress]
+            egress:
+              - to:
+                  - ipBlock:
+                      cidr: 0.0.0.0/0
+                      except:
+                        - (( variables.settings.podCIDR ))
+                        - (( variables.settings.serviceCIDR ))
+          ---
+          apiVersion: v1
+          kind: ResourceQuota
+          metadata:
+            name: app-quota
+            namespace: (( variables.ns ))
+          spec:
+            hard:
+              requests.cpu: "4"
+              requests.memory: 8Gi
+              limits.cpu: "8"
+              limits.memory: 16Gi
+              pods: "40"
+          ---
+          apiVersion: v1
+          kind: LimitRange
+          metadata:
+            name: app-limits
+            namespace: (( variables.ns ))
+          spec:
+            limits:
+              - type: Container
+                defaultRequest: { cpu: 50m, memory: 64Mi }
+                default: { cpu: 500m, memory: 256Mi }
+                max: { cpu: "2", memory: 2Gi }

@@ -1,0 +1,7 @@
+# For the CI test only: the labels of the sample namespace, so the CLI can
+# evaluate the policies' namespaceSelector without a cluster.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+namespaceSelector:
+  - name: invest-uat
+    labels: { product: invest, env: uat }

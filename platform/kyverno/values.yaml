@@ -1,0 +1,34 @@
+# Kyverno: the cluster's policy engine. It checks objects as they are created
+# (e.g. "images must be pinned by digest") and creates default objects for
+# every app namespace (network walls, quota, limits). The policies themselves
+# are in platform/policies/.
+# Chart: oci://ghcr.io/kyverno/charts/kyverno, pinned in bootstrap/argo-config/platform.yaml.
+# Chart defaults: https://github.com/kyverno/kyverno/blob/kyverno-chart-3.9.1/charts/kyverno/values.yaml
+
+config:
+  # Argo CD owns the lifecycle; the Helm post-delete hook this enables would
+  # show as permanent drift (Kyverno's own Argo CD notes).
+  preserve: false
+  # Kyverno only intercepts app namespaces (labelled "product" by the
+  # ApplicationSet). Platform namespaces (argocd, gateway, keda, kube-system)
+  # are never blocked by a Kyverno outage, and our policies only target apps.
+  # Cluster-scoped objects (Namespaces themselves) are matched on their own
+  # labels, so the per-namespace defaults are still generated.
+  webhooks:
+    namespaceSelector:
+      matchExpressions:
+        - key: product
+          operator: Exists
+
+# A Helm pre-delete hook; Argo CD doesn't run it. If Kyverno is ever removed,
+# delete its webhook configurations by hand (README).
+webhooksCleanup:
+  enabled: false
+
+admissionController:
+  # The webhooks fail closed: with Kyverno down, no app pod could be created.
+  # Two replicas, so a restart or a node drain never blocks a rollout.
+  replicas: 2
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1

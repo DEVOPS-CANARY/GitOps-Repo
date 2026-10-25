@@ -1,0 +1,37 @@
+# Sample objects for the policy test in CI (kyverno apply): a new app
+# namespace, one pod that follows the rules and two that break them.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: invest-uat
+  labels: { product: invest, env: uat }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: good
+  namespace: invest-uat
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/devops-canary/invest-backend@sha256:0000000000000000000000000000000000000000000000000000000000000000
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-tag
+  namespace: invest-uat
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/devops-canary/invest-backend:latest
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-registry
+  namespace: invest-uat
+spec:
+  containers:
+    - name: app
+      image: docker.io/library/nginx@sha256:0000000000000000000000000000000000000000000000000000000000000000
