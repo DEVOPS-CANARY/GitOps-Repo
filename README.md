@@ -11,6 +11,9 @@ bootstrap/                 applied once per cluster (scripts/bootstrap-lab.sh)
                            and the platform Applications (Gateway API, Traefik, KEDA)
 platform/traefik/          Traefik settings: the cluster's entry point
 platform/keda/             KEDA settings: autoscaling on events (e.g. Kafka lag)
+platform/kyverno/          Kyverno settings: the policy engine
+platform/policies/         our policies: walls, quota and limits per app namespace,
+                           images pinned by digest, Traefik's admin port closed
 apps/<product>/
   values.yaml              what is the same in every environment (rssb-app chart)
   envs/<env>/              uat, staging, prod
@@ -78,7 +81,7 @@ yours can't affect anyone else's. The only shared thing is this repo's `main`.
   `team-secrets` (see its README).
 - A running minikube (no ingress addon: Argo CD installs Traefik):
   ```sh
-  minikube start -p devops-lab --cpus 4 --memory 6144
+  minikube start -p devops-lab --cpus 4 --memory 6144 --cni calico
   ```
   Already have the ingress addon from an earlier setup? Nothing uses it any more.
   Disabling the addon doesn't remove it on a multi-node minikube, so also delete
@@ -90,6 +93,9 @@ yours can't affect anyone else's. The only shared thing is this repo's `main`.
   kubectl delete clusterrole,clusterrolebinding -l app.kubernetes.io/name=ingress-nginx
   kubectl delete namespace ingress-nginx --ignore-not-found
   ```
+  `--cni calico` matters: minikube's default network plugin ignores NetworkPolicies,
+  so the walls between apps (Kyverno, `platform/policies/`) would silently not exist.
+  MicroK8s at RSSB ships Calico. A CNI can only be chosen when the cluster is created.
   One node is enough for the lab. Add `--nodes 3` to rehearse node failures; on
   some Linux hosts multi-node minikube has pod networking problems.
 

@@ -1,0 +1,14 @@
+# Tells Argo CD that ghcr.io/kyverno/charts is a Helm registry served over
+# OCI (Kyverno publishes its chart there, so no dependency on github.io).
+# Public, no credentials.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-kyverno-charts
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: kyverno-charts
+  url: ghcr.io/kyverno/charts
+  enableOCI: "true"

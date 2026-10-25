@@ -1,0 +1,39 @@
+# In app namespaces, every container image must come from our registry and be
+# pinned by digest: a tag can be moved to other bytes after it was scanned, a
+# digest can't. The chart's schema already refuses tags in values files; this
+# rule holds even for objects that bypass the chart (kubectl run, a stray Job).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-pinned-images
+  annotations:
+    policies.kyverno.io/title: Images from our registry, pinned by digest
+spec:
+  validationFailureAction: Enforce
+  background: true # also reported for pods that already exist
+  rules:
+    - name: registry-and-digest
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchExpressions:
+                  - { key: product, operator: Exists }
+      context:
+        - name: settings
+          configMap:
+            name: platform-settings
+            namespace: kyverno
+      validate:
+        message: >-
+          Images in app namespaces must be {{ settings.data.imageRegistry }}<name>@sha256:<digest>
+          (pinned by digest, from the platform registry).
+        pattern:
+          spec:
+            =(initContainers):
+              - image: "{{ settings.data.imageRegistry }}*@sha256:*"
+            =(ephemeralContainers):
+              - image: "{{ settings.data.imageRegistry }}*@sha256:*"
+            containers:
+              - image: "{{ settings.data.imageRegistry }}*@sha256:*"

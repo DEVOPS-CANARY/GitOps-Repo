@@ -5,22 +5,27 @@
 #   gateway-api   the Gateway API CRDs (Gateway, HTTPRoute, ...), standard channel
 #   traefik       the Gateway API controller, and the shared Gateway "gateway/public"
 #   keda          event-driven autoscaling (e.g. a Kafka consumer on its lag)
+#   kyverno       policy engine: guard rails and per-namespace defaults
+#   policies      our policies (platform/policies), applied by Kyverno
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
   name: platform
 spec:
-  description: Shared platform components (entry point, autoscaling)
+  description: Shared platform components (entry point, autoscaling, policies)
   sourceRepos:
     - git@github.com:DEVOPS-CANARY/GitOps-Repo.git
     - https://github.com/kubernetes-sigs/gateway-api.git
     - https://traefik.github.io/charts
     - https://github.com/kedacore/charts.git
+    - ghcr.io/kyverno/charts
   destinations:
     - server: https://kubernetes.default.svc
       namespace: gateway
     - server: https://kubernetes.default.svc
       namespace: keda
+    - server: https://kubernetes.default.svc
+      namespace: kyverno
     # KEDA's metrics server needs one RoleBinding here, to read the API
     # server's client-auth settings (standard for any metrics API server).
     - server: https://kubernetes.default.svc
@@ -44,6 +49,8 @@ spec:
       kind: APIService
     - group: admissionregistration.k8s.io # KEDA checks ScaledObjects on create
       kind: ValidatingWebhookConfiguration
+    - group: kyverno.io # our policies (platform/policies)
+      kind: ClusterPolicy
 ---
 # Gateway API v1.6.3: the version Traefik 3.7 supports. Straight from the
 # Kubernetes project's repo at that tag, so an upgrade is one line here.
@@ -159,3 +166,74 @@ spec:
       labels:
         pod-security.kubernetes.io/enforce: restricted
         pod-security.kubernetes.io/enforce-version: latest
+---
+# Kyverno v1.19.1 (chart 3.9.1): the policy engine. Installed exactly as its
+# Argo CD notes recommend: server-side apply and diff (the CRDs are large and
+# Kyverno mutates its own objects), and config.preserve off (values file).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno
+  annotations:
+    argocd.argoproj.io/compare-options: ServerSideDiff=true,IncludeMutationWebhook=true
+spec:
+  project: platform
+  sources:
+    - repoURL: ghcr.io/kyverno/charts
+      chart: kyverno
+      targetRevision: 3.9.1
+      helm:
+        releaseName: kyverno
+        valueFiles:
+          - $values/platform/kyverno/values.yaml
+    - repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  # Kyverno fills its aggregated ClusterRoles at runtime; not drift.
+  ignoreDifferences:
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+      jqPathExpressions:
+        - .rules
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: restricted
+        pod-security.kubernetes.io/enforce-version: latest
+---
+# Our policies, plain YAML in platform/policies/. Sync wave 1: Kyverno's CRDs
+# must exist first (and a retry covers a fresh cluster).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: policies
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: platform
+  source:
+    repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
+    targetRevision: main
+    path: platform/policies
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

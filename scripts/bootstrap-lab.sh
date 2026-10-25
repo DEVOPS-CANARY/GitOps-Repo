@@ -38,7 +38,7 @@ wait_ready() {
     die "fix the cause above, then re-run this script (it is safe to re-run).
    Common causes: very slow image download (re-run, or WAIT_MINUTES=40), ImagePullBackOff
    (network/DNS/proxy to docker.io or quay.io), Pending (cluster too small:
-   minikube start --cpus 2 --memory 4096)"
+   minikube start --cpus 2 --memory 4096 --cni calico)"
   fi
 }
 

@@ -1,0 +1,13 @@
+# Values the policies read, so the same policies work on any cluster. At RSSB
+# change these to the MicroK8s ranges (pods 10.1.0.0/16, services
+# 10.152.183.0/24 by default) and to the registry the images come from.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-settings
+  namespace: kyverno
+data:
+  podCIDR: 10.244.0.0/16 # minikube default (kube-controller-manager --cluster-cidr)
+  serviceCIDR: 10.96.0.0/12 # minikube default (--service-cluster-ip-range)
+  # Only images from here may run in app namespaces (and only by digest).
+  imageRegistry: ghcr.io/devops-canary/

@@ -1,0 +1,18 @@
+# Traefik's pods accept traffic only on the public entrypoint (8000, the
+# Gateway's "web" listener). Its admin port (8080: dashboard and API) gets no
+# rule, so no pod in the cluster can reach it. Admins still can, through
+# `kubectl port-forward`: that traffic comes from the node itself, which the
+# CNI lets through for the kubelet's own use.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: traefik-public-port-only
+  namespace: gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: traefik
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - { protocol: TCP, port: 8000 }

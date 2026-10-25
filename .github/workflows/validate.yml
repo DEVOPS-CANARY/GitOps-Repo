@@ -1,0 +1,99 @@
+# Every PR: what Argo CD would apply is rendered and checked against the API
+# schemas, so a typo fails here and not in the cluster.
+#   - bootstrap/argo-config (projects, applications, the ApplicationSet)
+#   - platform/policies (Kyverno policies, network policies)
+#   - every app environment, rendered with the exact chart version it pins
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  HELM_VERSION: v4.2.1 # same Helm as Argo CD v3.5.5 renders with
+  KUBECONFORM_VERSION: v0.8.0
+  # JSON schemas for CRD kinds, pinned to a commit of the catalog.
+  CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/501527ab9c40c827144c8f45945b25a023e344ce
+  CHART_REGISTRY: oci://ghcr.io/devops-canary/charts
+
+jobs:
+  validate:
+    name: Render and validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Helm and kubeconform (checksums verified)
+        run: |
+          set -euo pipefail
+          cd "$(mktemp -d)"
+          curl -fsSLO "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz"
+          curl -fsSLO "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256sum"
+          sha256sum -c "helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256sum"
+          tar -xzf "helm-${HELM_VERSION}-linux-amd64.tar.gz"
+          sudo install -m 0755 linux-amd64/helm /usr/local/bin/helm
+          base="https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}"
+          curl -fsSLO "$base/kubeconform-linux-amd64.tar.gz"
+          curl -fsSLO "$base/CHECKSUMS"
+          sha256sum -c --ignore-missing CHECKSUMS
+          tar -xzf kubeconform-linux-amd64.tar.gz kubeconform
+          sudo install -m 0755 kubeconform /usr/local/bin/kubeconform
+
+      - name: Argo CD config (bootstrap/argo-config)
+        run: |
+          set -euo pipefail
+          kubectl kustomize bootstrap/argo-config | kubeconform -strict -summary \
+            -schema-location default \
+            -schema-location "$CRD_SCHEMAS/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json"
+
+      - name: Policies (platform/policies)
+        run: |
+          set -euo pipefail
+          kubeconform -strict -summary -schema-location default \
+            -schema-location "$CRD_SCHEMAS/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
+            platform/policies/*.yaml
+
+      # The policies against sample objects (platform/policies/tests): the
+      # good pod must pass, the bad ones must fail, the namespace must get its
+      # defaults. Same Kyverno version as the cluster runs.
+      - name: Policy behaviour (kyverno apply)
+        run: |
+          set -euo pipefail
+          mkdir -p generated
+          docker run --rm -v "$PWD/platform/policies:/p:ro" -v "$PWD/generated:/out" \
+            ghcr.io/kyverno/kyverno-cli:v1.19.1 \
+            apply /p/require-pinned-images.yaml /p/app-namespace-defaults.yaml \
+            --resource /p/tests/resources.yaml --values-file /p/tests/values.yaml \
+            -o /out --table | tee result.txt
+          for pod in bad-tag bad-registry; do
+            grep -qiE "$pod.*fail" result.txt || { echo "::error::pod $pod breaks the image rule but was not rejected"; exit 1; }
+          done
+          if grep -iE 'Pod/good.*fail' result.txt; then echo "::error::the compliant pod was rejected"; exit 1; fi
+          if grep -iE '\bfail\b' result.txt | grep -v 'Pod/bad-'; then echo "::error::an unexpected rule failed"; exit 1; fi
+          n=$(grep -c '^kind: NetworkPolicy' generated/*.yaml)
+          [ "$n" -ge 5 ] || { echo "::error::expected 5 NetworkPolicies generated for the namespace, got $n"; exit 1; }
+          echo "OK: compliant pod passes, non-compliant pods fail, $n network policies + quota + limits generated"
+
+      # Each environment with the chart version its values file pins, exactly
+      # as the ApplicationSet does. Helm prints "Pulled:" lines before the
+      # YAML for OCI charts, so only what follows the first '---' is kept.
+      - name: App environments (rssb-app chart)
+        run: |
+          set -euo pipefail
+          for values in apps/*/envs/*/values.yaml; do
+            app=$(cut -d/ -f2 <<<"$values")
+            version=$(awk '/^  version:/ {print $2; exit}' "$values")
+            echo "::group::$values (rssb-app $version)"
+            helm template "$app" "$CHART_REGISTRY/rssb-app" --version "$version" \
+              -f "apps/$app/values.yaml" -f "$values" \
+              | sed -n '/^---/,$p' \
+              | kubeconform -strict -summary -schema-location default \
+                  -schema-location "$CRD_SCHEMAS/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json"
+            echo "::endgroup::"
+          done
