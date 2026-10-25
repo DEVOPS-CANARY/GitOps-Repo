@@ -30,7 +30,10 @@ fingerprint() { openssl x509 -noout -fingerprint -sha256 | cut -d= -f2; }
 # of a bare "timed out". Usage: wait_ready <namespace> <kind/name> <pod-selector>
 wait_ready() {
   echo "   waiting for $2 (first install downloads images: can take a while)"
-  if ! kubectl -n "$1" rollout status "$2" --timeout="${WAIT_MINUTES}m" >/dev/null; then
+  # `kubectl wait`, not `rollout status`: the latter gives up at once when a
+  # Deployment has been stuck past its 10-minute progress deadline (a slow
+  # image pull does that), so WAIT_MINUTES was never honoured on a re-run.
+  if ! kubectl -n "$1" wait "$2" --for=condition=Available --timeout="${WAIT_MINUTES}m" >/dev/null; then
     echo; echo "   $2 is not ready after $WAIT_MINUTES minutes. Pod status:"
     kubectl -n "$1" get pods -l "$3" -o wide | sed 's/^/     /'
     echo "   Recent events:"
