@@ -20,7 +20,7 @@ apps/<product>/
     values.yaml            chart version, image digests, host, per-env settings
     secrets/               sealed secrets for this product in this environment
 lab-services/compose.yaml  LAB ONLY: databases in Docker, outside the cluster
-scripts/                   bootstrap-lab.sh, lab-services.sh, seal-secret.sh
+scripts/                   bootstrap-lab.sh, lab-services.sh, seal-secret.sh, wall-test.sh
 ```
 
 The ApplicationSet turns every `apps/<product>/envs/<env>/values.yaml` into an
@@ -58,6 +58,11 @@ the pods behind it.
 waiting for it, e.g. a Kafka consumer on its lag, not only on CPU. An app asks for it
 in its values file (rssb-app chart); KEDA measures the metric and feeds it to a normal
 HorizontalPodAutoscaler. To see what it is doing: `kubectl get scaledobject,hpa -A`.
+
+**Walls between apps:** Kyverno (namespace `kyverno`, policies in `platform/policies/`) gives
+every app namespace default-deny network rules (open only to the gateway, its own namespace,
+DNS and the world outside the cluster), a quota and default limits, and refuses any image that
+is not from our registry by digest. `scripts/wall-test.sh` proves it from a pod in UAT.
 
 **Databases, Redis and Kafka live outside the cluster**, as at RSSB, where they run
 on their own VMs. In the lab they run in Docker on your machine (`lab-services/`), and
