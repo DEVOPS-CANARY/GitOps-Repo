@@ -2,38 +2,46 @@
 # pinned by digest: a tag can be moved to other bytes after it was scanned, a
 # digest can't. The chart's schema already refuses tags in values files; this
 # rule holds even for objects that bypass the chart (kubectl run, a stray Job).
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+#
+# CLUSTER-SPECIFIC VALUE: the `registry` variable below. At RSSB set it to
+# the registry the pipeline pushes to.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
 metadata:
   name: require-pinned-images
   annotations:
     policies.kyverno.io/title: Images from our registry, pinned by digest
 spec:
-  validationFailureAction: Enforce
-  background: true # also reported for pods that already exist
-  rules:
-    - name: registry-and-digest
-      match:
-        any:
-          - resources:
-              kinds: [Pod]
-              namespaceSelector:
-                matchExpressions:
-                  - { key: product, operator: Exists }
-      context:
-        - name: settings
-          configMap:
-            name: platform-settings
-            namespace: kyverno
-      validate:
-        message: >-
-          Images in app namespaces must be {{ settings.data.imageRegistry }}<name>@sha256:<digest>
-          (pinned by digest, from the platform registry).
-        pattern:
-          spec:
-            =(initContainers):
-              - image: "{{ settings.data.imageRegistry }}*@sha256:*"
-            =(ephemeralContainers):
-              - image: "{{ settings.data.imageRegistry }}*@sha256:*"
-            containers:
-              - image: "{{ settings.data.imageRegistry }}*@sha256:*"
+  validationActions: [Deny]
+  evaluation:
+    background:
+      enabled: true # also reported for pods that already exist
+  # Checked on the Pod and on everything that makes Pods, so a bad Deployment
+  # is refused at once instead of failing silently in its ReplicaSet.
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - { key: product, operator: Exists }
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  variables:
+    - name: registry
+      expression: '"ghcr.io/devops-canary/"'
+    - name: images
+      expression: >-
+        object.spec.containers.map(c, c.image)
+        + (has(object.spec.initContainers) ? object.spec.initContainers.map(c, c.image) : [])
+        + (has(object.spec.ephemeralContainers) ? object.spec.ephemeralContainers.map(c, c.image) : [])
+    - name: bad
+      expression: variables.images.filter(i, !(i.startsWith(variables.registry) && i.contains('@sha256:')))
+  validations:
+    - expression: size(variables.bad) == 0
+      messageExpression: >-
+        'Images in app namespaces must be ' + variables.registry + '<name>@sha256:<digest>'
+        + ' (from the platform registry, pinned by digest); got: ' + variables.bad.join(', ')

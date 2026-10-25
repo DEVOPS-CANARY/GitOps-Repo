@@ -10,52 +10,59 @@
 #   Quota           a ceiling per namespace, so one app can't starve the others.
 #   LimitRange      defaults for pods that forget to ask (the chart always
 #                   does), so the quota can be enforced on every pod.
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+#
+# CLUSTER-SPECIFIC VALUES are the `settings` variable below: the pod and
+# Service address ranges. At RSSB set them to the MicroK8s ranges (by default
+# pods 10.1.0.0/16, Services 10.152.183.0/24). Kept in the policy, not read
+# from a ConfigMap, so the policy needs no lookup and can be tested offline.
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
 metadata:
   name: app-namespace-defaults
   annotations:
     policies.kyverno.io/title: Default walls, quota and limits for app namespaces
-    policies.kyverno.io/description: >-
-      Generates default-deny NetworkPolicies with the allowed exceptions, a
-      ResourceQuota and a LimitRange in every namespace labelled "product".
 spec:
-  generateExisting: true # existing app namespaces get them too, not only new ones
-  rules:
-    - name: default-deny
-      match:
-        any:
-          - resources:
-              kinds: [Namespace]
-              selector:
-                matchExpressions:
-                  - { key: product, operator: Exists }
-      generate:
-        apiVersion: networking.k8s.io/v1
-        kind: NetworkPolicy
-        name: default-deny
-        namespace: "{{ request.object.metadata.name }}"
-        synchronize: true
-        data:
+  evaluation:
+    synchronize:
+      enabled: true
+    generateExisting:
+      enabled: true # existing app namespaces get them too, not only new ones
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [namespaces]
+  matchConditions:
+    - name: is-app-namespace
+      expression: "has(object.metadata.labels) && 'product' in object.metadata.labels"
+  variables:
+    - name: settings
+      expression: >-
+        {
+          "podCIDR": "10.244.0.0/16",
+          "serviceCIDR": "10.96.0.0/12"
+        }
+    - name: ns
+      expression: object.metadata.name
+  generate:
+    - template:
+        interpolate: cel
+        value: |
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: default-deny
+            namespace: (( variables.ns ))
           spec:
             podSelector: {}
             policyTypes: [Ingress, Egress]
-
-    - name: allow-same-namespace
-      match:
-        any:
-          - resources:
-              kinds: [Namespace]
-              selector:
-                matchExpressions:
-                  - { key: product, operator: Exists }
-      generate:
-        apiVersion: networking.k8s.io/v1
-        kind: NetworkPolicy
-        name: allow-same-namespace
-        namespace: "{{ request.object.metadata.name }}"
-        synchronize: true
-        data:
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: allow-same-namespace
+            namespace: (( variables.ns ))
           spec:
             podSelector: {}
             policyTypes: [Ingress, Egress]
@@ -65,22 +72,12 @@ spec:
             egress:
               - to:
                   - podSelector: {}
-
-    - name: allow-from-gateway
-      match:
-        any:
-          - resources:
-              kinds: [Namespace]
-              selector:
-                matchExpressions:
-                  - { key: product, operator: Exists }
-      generate:
-        apiVersion: networking.k8s.io/v1
-        kind: NetworkPolicy
-        name: allow-from-gateway
-        namespace: "{{ request.object.metadata.name }}"
-        synchronize: true
-        data:
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: allow-from-gateway
+            namespace: (( variables.ns ))
           spec:
             podSelector: {}
             policyTypes: [Ingress]
@@ -89,22 +86,12 @@ spec:
                   - namespaceSelector:
                       matchLabels:
                         kubernetes.io/metadata.name: gateway
-
-    - name: allow-dns
-      match:
-        any:
-          - resources:
-              kinds: [Namespace]
-              selector:
-                matchExpressions:
-                  - { key: product, operator: Exists }
-      generate:
-        apiVersion: networking.k8s.io/v1
-        kind: NetworkPolicy
-        name: allow-dns
-        namespace: "{{ request.object.metadata.name }}"
-        synchronize: true
-        data:
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: allow-dns
+            namespace: (( variables.ns ))
           spec:
             podSelector: {}
             policyTypes: [Egress]
@@ -119,30 +106,15 @@ spec:
                 ports:
                   - { protocol: UDP, port: 53 }
                   - { protocol: TCP, port: 53 }
-
-    # Databases, Redis and Kafka live outside the cluster (on VMs at RSSB, in
-    # Docker in the lab), so egress to anything that is not a pod or a
-    # Service is allowed. The firewall around those VMs is RSSB's wall.
-    - name: allow-outside-cluster
-      match:
-        any:
-          - resources:
-              kinds: [Namespace]
-              selector:
-                matchExpressions:
-                  - { key: product, operator: Exists }
-      context:
-        - name: settings
-          configMap:
-            name: platform-settings
-            namespace: kyverno
-      generate:
-        apiVersion: networking.k8s.io/v1
-        kind: NetworkPolicy
-        name: allow-outside-cluster
-        namespace: "{{ request.object.metadata.name }}"
-        synchronize: true
-        data:
+          ---
+          # Databases, Redis and Kafka live outside the cluster (VMs at RSSB,
+          # Docker in the lab): egress to anything that is not a pod or a
+          # Service is allowed. The firewall around those VMs is RSSB's wall.
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: allow-outside-cluster
+            namespace: (( variables.ns ))
           spec:
             podSelector: {}
             policyTypes: [Egress]
@@ -151,24 +123,14 @@ spec:
                   - ipBlock:
                       cidr: 0.0.0.0/0
                       except:
-                        - "{{ settings.data.podCIDR }}"
-                        - "{{ settings.data.serviceCIDR }}"
-
-    - name: quota
-      match:
-        any:
-          - resources:
-              kinds: [Namespace]
-              selector:
-                matchExpressions:
-                  - { key: product, operator: Exists }
-      generate:
-        apiVersion: v1
-        kind: ResourceQuota
-        name: app-quota
-        namespace: "{{ request.object.metadata.name }}"
-        synchronize: true
-        data:
+                        - (( variables.settings.podCIDR ))
+                        - (( variables.settings.serviceCIDR ))
+          ---
+          apiVersion: v1
+          kind: ResourceQuota
+          metadata:
+            name: app-quota
+            namespace: (( variables.ns ))
           spec:
             hard:
               requests.cpu: "4"
@@ -176,22 +138,12 @@ spec:
               limits.cpu: "8"
               limits.memory: 16Gi
               pods: "40"
-
-    - name: limits
-      match:
-        any:
-          - resources:
-              kinds: [Namespace]
-              selector:
-                matchExpressions:
-                  - { key: product, operator: Exists }
-      generate:
-        apiVersion: v1
-        kind: LimitRange
-        name: app-limits
-        namespace: "{{ request.object.metadata.name }}"
-        synchronize: true
-        data:
+          ---
+          apiVersion: v1
+          kind: LimitRange
+          metadata:
+            name: app-limits
+            namespace: (( variables.ns ))
           spec:
             limits:
               - type: Container

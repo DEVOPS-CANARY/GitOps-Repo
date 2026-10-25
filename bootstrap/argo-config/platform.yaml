@@ -49,8 +49,10 @@ spec:
       kind: APIService
     - group: admissionregistration.k8s.io # KEDA checks ScaledObjects on create
       kind: ValidatingWebhookConfiguration
-    - group: kyverno.io # our policies (platform/policies)
-      kind: ClusterPolicy
+    - group: policies.kyverno.io # our policies (platform/policies)
+      kind: GeneratingPolicy
+    - group: policies.kyverno.io
+      kind: ValidatingPolicy
 ---
 # Gateway API v1.6.3: the version Traefik 3.7 supports. Straight from the
 # Kubernetes project's repo at that tag, so an upgrade is one line here.

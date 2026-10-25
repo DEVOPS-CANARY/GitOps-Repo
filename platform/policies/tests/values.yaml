@@ -1,11 +1,7 @@
-# Stand-in for the platform-settings ConfigMap during the CI test, where no
-# cluster exists to read it from.
+# For the CI test only: the labels of the sample namespace, so the CLI can
+# evaluate the policies' namespaceSelector without a cluster.
 apiVersion: cli.kyverno.io/v1alpha1
 kind: Values
-globalValues:
-  settings.data.podCIDR: 10.244.0.0/16
-  settings.data.serviceCIDR: 10.96.0.0/12
-  settings.data.imageRegistry: ghcr.io/devops-canary/
 namespaceSelector:
   - name: invest-uat
     labels: { product: invest, env: uat }

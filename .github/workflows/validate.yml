@@ -66,7 +66,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p generated
-          docker run --rm -v "$PWD/platform/policies:/p:ro" -v "$PWD/generated:/out" \
+          # Run as the runner's user, so the container may write into generated/.
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$PWD/platform/policies:/p:ro" -v "$PWD/generated:/out" \
             ghcr.io/kyverno/kyverno-cli:v1.19.1 \
             apply /p/require-pinned-images.yaml /p/app-namespace-defaults.yaml \
             --resource /p/tests/resources.yaml --values-file /p/tests/values.yaml \
