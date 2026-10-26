@@ -11,7 +11,7 @@ components:
   backend:
     image:
       repository: ghcr.io/devops-canary/logistics-backend
-      digest: sha256:82a7402773d9fd43ca283dd2ceeb903d64cef8a70da00034cfdebc5f91a64b1c # develop@821f32d tree-ace41370
+      digest: sha256:82a7402773d9fd43ca283dd2ceeb903d64cef8a70da00034cfdebc5f91a64b1c # develop@a215781 tree-fcdc7adc
     env:
       ALLOWED_ORIGINS: http://uat.logistics.local
       # Required in practice: the app passes these straight to jsonwebtoken,
@@ -30,13 +30,13 @@ components:
   frontend:
     image:
       repository: ghcr.io/devops-canary/logistics-frontend
-      digest: sha256:71146bfaaaa8ae8e784789b3c59465450048c2a714f8834919a4530c27230a8e # develop@821f32d tree-ace41370
+      digest: sha256:71146bfaaaa8ae8e784789b3c59465450048c2a714f8834919a4530c27230a8e # develop@a215781 tree-fcdc7adc
     replicas: 2
 
   notifications: # the worker: shared settings in ../../values.yaml
     image:
       repository: ghcr.io/devops-canary/logistics-backend
-      digest: sha256:82a7402773d9fd43ca283dd2ceeb903d64cef8a70da00034cfdebc5f91a64b1c # develop@821f32d tree-ace41370
+      digest: sha256:82a7402773d9fd43ca283dd2ceeb903d64cef8a70da00034cfdebc5f91a64b1c # develop@a215781 tree-fcdc7adc
     env:
       KAFKA_USERNAME: logistics_uat
       KAFKA_TOPIC_PREFIX: uat.logistics.
