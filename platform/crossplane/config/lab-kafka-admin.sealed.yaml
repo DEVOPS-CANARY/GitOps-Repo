@@ -1,0 +1,14 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: lab-kafka-admin
+  namespace: crossplane-system
+spec:
+  encryptedData:
+    credentials: AgCMxfmqj8RTg85UHQz+bqQSsjKjXO0l0C1GlBywAfxcdhO/iaNKGFCF4tlhCoMm9COBqYUEq6zPFAOkLIqcxypTWKYmCtxholEi97Xg429xU1Yj9LSgzP/Gyw5JyuASsV5vxyeUl8FuXtM8fHkfHRVEWzBIaQqNip05kZfZBG55ipt+887SF4Smxl3EnYC+Uic7cDUap2ec/b/6Jxcw/hNPcVVhNFdW6d3mn18yZkpg74EZ5anQiwss4FDRMLztJv250SxdA97jclk46frYZhqbEHE9BihPaj/h6HL5D3T/qJOjgaugaZ4GkqZStsnAZZhLKDd2DV6THZyK7NLqBRCXW28zKf4yeoyOlPc3Jmqg6iANlrpNvxcmtex2+BNom/CH7zGv1AbTdWzj95yg2cX8Y6WiZMHyVAlneFljZTnERegdkZOCr8g9ptdRGY+2CiC1rdCGLG5iq9I4cGtxj0KcpKLRWFLc7jiIuu1oEBE7f3ayiyCeVjubTsbzlMUZUzIDOP3MT2hzHta5QxbsnzpJDFihRGEhXB04caQrXCk1fDi2Sv/Dqamly4WEncIuOHeHv8HAQQK0NAHnlmJiX2QeoAGI1NevV/2/umQzC8GjPAR3plCL91d8rrtJoUGT/KcSoC3mtLS8D84xU5p31eVYZylHWONVBpPx4o1S+gUzDtHoeysra8nnlOI4sxKdBdiRxtWiOFkEZh7qTyArqk297CpGRPTIA7nYEUuvFYkTr1eJTJeExpOT/A/iJ7qmU4CXP1TKRLRAlYPIMthOTwaYoHuPtNCTFElS9NeewLCAkPciU4wsbRTWac/BvjCSLS+gMyM57RDsH/4O3YkSecn/LmKGAv2NEAOAf0hfdpH/hf+kmUs3D5wcQSw9GCxYBN42XuaGQav97xoe7rPfAO546Bw=
+  template:
+    metadata:
+      name: lab-kafka-admin
+      namespace: crossplane-system
+    type: Opaque

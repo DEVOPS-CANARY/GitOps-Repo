@@ -107,6 +107,13 @@ for name in "${users[@]}"; do ok "redis user: $name (keys and channels ${name/_/
 # password. The password goes in on stdin and only reaches the tool inside the
 # container.
 kafka() { MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" exec -T kafka "/opt/kafka/bin/$1" --bootstrap-server 127.0.0.1:9094 "${@:2}"; }
+# The platform's Crossplane provider-kafka administers topics, users and ACLs
+# through the client listener as SCRAM superuser "admin" (KAFKA_SUPER_USERS).
+if [ -n "${KAFKA_ADMIN_PASSWORD:-}" ]; then
+  printf '%s\n' "$KAFKA_ADMIN_PASSWORD" | MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" exec -T kafka sh -c \
+    'read -r pw; exec /opt/kafka/bin/kafka-configs.sh --bootstrap-server 127.0.0.1:9094 --alter --entity-type users --entity-name admin --add-config "SCRAM-SHA-512=[iterations=8192,password=$pw]"' >/dev/null
+  ok "kafka admin user for Crossplane (provider-kafka)"
+fi
 for var in $(compgen -e | grep -E '^[A-Z0-9]+_[A-Z0-9]+_KAFKA_PASSWORD$' || true); do
   name="$(tr 'A-Z' 'a-z' <<<"${var%_KAFKA_PASSWORD}")"     # logistics_uat
   product="${name%%_*}" env="${name#*_}"

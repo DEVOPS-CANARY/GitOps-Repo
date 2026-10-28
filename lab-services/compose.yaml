@@ -75,7 +75,10 @@ services:
       # listeners have no login (principal ANONYMOUS), hence super user.
       KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer
       KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
-      KAFKA_SUPER_USERS: User:ANONYMOUS
+      # admin: a SCRAM user on the client listener for Crossplane's
+      # provider-kafka (declared topics, users and ACLs); created by
+      # lab-services.sh from KAFKA_ADMIN_PASSWORD in team-secrets.
+      KAFKA_SUPER_USERS: User:ANONYMOUS;User:admin
       KAFKA_LOG_DIRS: /var/lib/kafka/data # default is /tmp: lost on restart
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
