@@ -16,7 +16,7 @@ printf '.dockerconfigjson={"auths":{"ghcr.io":{"auth":"%s"}}}\n' "$(printf '%s' 
   | ./scripts/seal-secret.sh todo uat ghcr-pull kubernetes.io/dockerconfigjson
 
 # Backend secrets (one KEY=VALUE per line; add every variable the app reads)
-printf 'DATABASE_URL=%s\nJWT_SECRET=%s\n' "$db_url" "$(openssl rand -hex 32)" \
+printf 'JWT_SECRET=%s\n' "$(openssl rand -hex 32)" \
   | ./scripts/seal-secret.sh todo uat backend-secrets
 
 ```
