@@ -7,7 +7,9 @@ components:
   backend:
     type: nestjs
     port: 3001
-    secretRefs: [backend-secrets] # DATABASE_URL, JWT_SECRET, ... (sealed per environment)
+    secretRefs: [backend-secrets] # JWT_SECRET, ... (sealed per environment)
+    database:
+      managed: true # role + database todo_<env> created by the platform (Crossplane); DATABASE_URL composed in the pod
     ingress: { enabled: true, path: /api, stripPrefix: true } # /api/users reaches the app as /users
     env:
       NODE_ENV: production

@@ -3,9 +3,11 @@
 resourcesCrossplane:
   requests: { cpu: 50m, memory: 128Mi }
   limits: { cpu: 500m, memory: 512Mi }
+# The RBAC manager renews a 15 s leader lease; throttled at the chart's 100m
+# it lost it on this laptop's slow API server and crash-looped.
 resourcesRBACManager:
-  requests: { cpu: 25m, memory: 64Mi }
-  limits: { cpu: 100m, memory: 256Mi }
+  requests: { cpu: 50m, memory: 64Mi }
+  limits: { cpu: 500m, memory: 256Mi }
 # Pod Security "restricted" on the namespace: non-root, no privilege
 # escalation, no capabilities, default seccomp.
 securityContextCrossplane:
