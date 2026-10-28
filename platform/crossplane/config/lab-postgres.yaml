@@ -1,0 +1,17 @@
+# The lab's Postgres (Docker on the teammate's machine, scripts/lab-services.sh),
+# reachable from pods as host.minikube.internal:15432. The admin connection
+# lives only here (lab-postgres-admin.sealed.yaml), never in an app namespace:
+# apps reference this config by name and get their own role and database.
+# At RSSB: one ClusterProviderConfig per database server the DBA team hands
+# over, with an admin role limited to CREATEDB and CREATEROLE.
+apiVersion: postgresql.sql.m.crossplane.io/v1alpha1
+kind: ClusterProviderConfig
+metadata:
+  name: lab-postgres
+spec:
+  sslMode: disable # LAB: plain TCP to the Docker container; RSSB servers use TLS
+  credentials:
+    source: PostgreSQLConnectionSecret
+    connectionSecretRef:
+      name: lab-postgres-admin
+      namespace: crossplane-system

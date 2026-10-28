@@ -1,0 +1,13 @@
+# provider-sql: PostgreSQL roles, databases and grants as Kubernetes objects.
+# Apps declare theirs in their own namespace (the rssb-app chart renders them
+# from `database.managed`); this provider creates them on the lab Postgres.
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-sql
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1" # before the ProviderConfig that needs its CRDs
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/provider-sql:v0.16.2
+  runtimeConfigRef:
+    name: restricted
