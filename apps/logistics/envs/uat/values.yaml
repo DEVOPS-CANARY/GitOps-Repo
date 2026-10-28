@@ -2,7 +2,7 @@
 # Shared settings: ../../values.yaml. Image digests are written by CI.
 
 chart:
-  version: 0.5.0 # rssb-app chart version for this environment (read by Argo CD)
+  version: 0.7.0 # rssb-app chart version for this environment (read by Argo CD)
 
 global:
   host: uat.logistics.local
@@ -22,10 +22,6 @@ components:
       # Redis (REDIS_URL is sealed in backend-secrets): every key and channel
       # starts with this, the only prefix this environment's Redis user may use.
       REDIS_KEY_PREFIX: "logistics:uat:"
-      # Kafka: this user may only use topics and consumer groups starting with
-      # the prefix (KAFKA_PASSWORD is sealed in backend-secrets).
-      KAFKA_USERNAME: logistics_uat
-      KAFKA_TOPIC_PREFIX: uat.logistics.
 
   frontend:
     image:
@@ -37,9 +33,6 @@ components:
     image:
       repository: ghcr.io/devops-canary/logistics-backend
       digest: sha256:82a7402773d9fd43ca283dd2ceeb903d64cef8a70da00034cfdebc5f91a64b1c # develop@692ff07 tree-0fa67dcb
-    env:
-      KAFKA_USERNAME: logistics_uat
-      KAFKA_TOPIC_PREFIX: uat.logistics.
     autoscaling: # KEDA lag scaling: shared settings in ../../values.yaml
       kafka:
         topic: uat.logistics.tracking-events
