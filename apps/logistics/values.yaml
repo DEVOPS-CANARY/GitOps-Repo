@@ -23,10 +23,15 @@ components:
     env:
       NODE_ENV: production
       PORT: "3001"
-      # Kafka (lab: in lab-services, outside the cluster). The username, topic
-      # prefix and password (sealed) are per environment.
-      KAFKA_BROKERS: host.minikube.internal:19092
     secretRefs: [backend-secrets]
+    # Its own Kafka user, fenced to <env>.logistics.* by ACLs, and the topic it
+    # produces to, created by the platform (Crossplane provider-kafka). The
+    # generated credentials reach the pods as KAFKA_USERNAME/PASSWORD/BROKERS
+    # and the prefix as KAFKA_TOPIC_PREFIX; nothing sealed, nothing scripted.
+    kafka:
+      managed: true
+      topics:
+        - { name: tracking-events, partitions: 6 } # one per consumer at most (notifications maxReplicas)
     ingress:
       enabled: true
       path: /api
@@ -51,10 +56,11 @@ components:
   notifications:
     type: worker
     command: [node, dist/worker.js]
-    secretRefs: [notifications-secrets] # DATABASE_URL + KAFKA_PASSWORD only
+    secretRefs: [notifications-secrets] # DATABASE_URL only
+    kafka:
+      existingSecret: backend-kafka # the backend's user and prefix, same variables
     env:
       NODE_ENV: production
-      KAFKA_BROKERS: host.minikube.internal:19092
       # LAB: each notification "takes" 200 ms (stands in for an email or SMS
       # call), so a burst of events builds visible consumer lag for KEDA.
       NOTIFY_DELAY_MS: "200"
