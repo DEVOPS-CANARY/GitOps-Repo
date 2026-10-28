@@ -1,0 +1,22 @@
+# todo in UAT. Deployed on every merge to the app's develop branch.
+# Shared settings: ../../values.yaml. Image digests are written by CI.
+
+chart:
+  version: 0.5.0 # rssb-app chart version for this environment (read by Argo CD)
+
+global:
+  host: uat.todo.local
+  imagePullSecrets: [ghcr-pull] # sealed in secrets/ (see secrets/README.md)
+
+components:
+  backend:
+    image:
+      repository: ghcr.io/devops-canary/todo-backend
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000 # placeholder: the first deploy from develop writes the real digest
+    env:
+      ALLOWED_ORIGINS: http://uat.todo.local
+
+  frontend:
+    image:
+      repository: ghcr.io/devops-canary/todo-frontend
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000 # placeholder: the first deploy from develop writes the real digest

@@ -1,0 +1,23 @@
+# The answers this folder was rendered with (DEVOPS-CANARY/golden-path,
+# templates/gitops-app). Copier reads them for `copier update`; don't edit by hand.
+_commit: v1.6.5
+_src_path: gh:DEVOPS-CANARY/golden-path
+app: todo
+backend: nestjs
+backend_orm: typeorm
+backend_port: 3001
+chart_version: 0.5.0
+frontend: nextjs
+gitops_repo: DEVOPS-CANARY/GitOps-Repo
+host_domain: local
+needs_kafka: false
+needs_postgres: true
+needs_redis: false
+node_version: '22'
+owner: princebabou
+package_manager: yarn
+pipeline_version: v1
+registry: ghcr.io/devops-canary
+repository: DEVOPS-CANARY/todo-app
+template: gitops-app
+worker: ''
