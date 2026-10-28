@@ -22,6 +22,15 @@ components:
       # Redis (REDIS_URL is sealed in backend-secrets): every key and channel
       # starts with this, the only prefix this environment's Redis user may use.
       REDIS_KEY_PREFIX: "logistics:uat:"
+    # Its own Kafka user (logistics_uat, fenced to uat.logistics.* by ACLs) and
+    # the topic it produces to, created by the platform (Crossplane
+    # provider-kafka). The generated credentials reach the pods as
+    # KAFKA_USERNAME/PASSWORD/BROKERS, the prefix as KAFKA_TOPIC_PREFIX:
+    # nothing sealed, nothing scripted. Needs chart 0.7.
+    kafka:
+      managed: true
+      topics:
+        - { name: tracking-events, partitions: 6 } # one per consumer at most (notifications maxReplicas)
 
   frontend:
     image:
@@ -33,6 +42,8 @@ components:
     image:
       repository: ghcr.io/devops-canary/logistics-backend
       digest: sha256:82a7402773d9fd43ca283dd2ceeb903d64cef8a70da00034cfdebc5f91a64b1c # develop@692ff07 tree-0fa67dcb
+    kafka:
+      existingSecret: backend-kafka # the backend's user and prefix, same variables
     autoscaling: # KEDA lag scaling: shared settings in ../../values.yaml
       kafka:
         topic: uat.logistics.tracking-events
