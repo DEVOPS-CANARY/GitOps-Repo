@@ -7,7 +7,7 @@ never appear on a command line, on screen or in Git. Run from the root of GitOps
 | Secret | Keys | Who provides the values |
 |---|---|---|
 | `ghcr-pull` | `.dockerconfigjson` | Platform team (registry read token) |
-| `backend-secrets` | `DATABASE_URL`, `JWT_SECRET` and every other secret the backend reads | The app's secret owners (readiness rule A18) |
+| `backend-secrets` | `JWT_SECRET` and every other secret the backend reads (the database connection is managed, see below) | The app's secret owners (readiness rule A18) |
 
 ```sh
 # Registry pull secret (a token with ONLY read:packages)
@@ -21,8 +21,9 @@ printf 'DATABASE_URL=%s\nJWT_SECRET=%s\n' "$db_url" "$(openssl rand -hex 32)" \
 
 ```
 
-Lab services (`scripts/lab-services.sh`) create the database
-from `TODO_UAT_DB_PASSWORD` in
-team-secrets. At RSSB these are requests to the database owners (infra-ops forms).
+The database and its role (`todo_uat`) are declared in `../values.yaml`
+(`database.managed`) and created by the platform's Crossplane provider on the
+lab Postgres; the generated password reaches the pods as `DATABASE_URL`.
+Nothing to request, nothing to seal.
 
 Delete this file once the secrets are sealed, or keep it as the inventory.
