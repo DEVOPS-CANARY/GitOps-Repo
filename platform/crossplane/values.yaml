@@ -1,0 +1,26 @@
+# Crossplane core (chart crossplane, charts.crossplane.io/stable), sized for the lab.
+# Providers are declared in config/ (installed by Crossplane itself, not by Helm).
+resourcesCrossplane:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits: { cpu: 500m, memory: 512Mi }
+resourcesRBACManager:
+  requests: { cpu: 25m, memory: 64Mi }
+  limits: { cpu: 100m, memory: 256Mi }
+# Pod Security "restricted" on the namespace: non-root, no privilege
+# escalation, no capabilities, default seccomp.
+securityContextCrossplane:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: [ALL] }
+  seccompProfile: { type: RuntimeDefault }
+securityContextRBACManager:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: [ALL] }
+  seccompProfile: { type: RuntimeDefault }

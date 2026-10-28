@@ -7,6 +7,8 @@
 #   keda          event-driven autoscaling (e.g. a Kafka consumer on its lag)
 #   kyverno       policy engine: guard rails and per-namespace defaults
 #   policies      our policies (platform/policies), applied by Kyverno
+#   crossplane    databases, roles (and later topics) declared by apps as objects
+#                 in their namespace, created by providers (golden path layer 6)
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -19,6 +21,7 @@ spec:
     - https://github.com/traefik/traefik-helm-chart.git
     - https://github.com/kedacore/charts.git
     - ghcr.io/kyverno/charts
+    - https://charts.crossplane.io/stable
   destinations:
     - server: https://kubernetes.default.svc
       namespace: gateway
@@ -26,6 +29,8 @@ spec:
       namespace: keda
     - server: https://kubernetes.default.svc
       namespace: kyverno
+    - server: https://kubernetes.default.svc
+      namespace: crossplane-system
     # KEDA's metrics server needs one RoleBinding here, to read the API
     # server's client-auth settings (standard for any metrics API server).
     - server: https://kubernetes.default.svc
@@ -53,6 +58,12 @@ spec:
       kind: GeneratingPolicy
     - group: policies.kyverno.io
       kind: ValidatingPolicy
+    - group: pkg.crossplane.io # provider packages and their pod settings
+      kind: Provider
+    - group: pkg.crossplane.io
+      kind: DeploymentRuntimeConfig
+    - group: postgresql.sql.m.crossplane.io # the lab Postgres, shared by all apps
+      kind: ClusterProviderConfig
 ---
 # Gateway API v1.6.3: the version Traefik 3.7 supports. Straight from the
 # Kubernetes project's repo at that tag, so an upgrade is one line here.
@@ -243,3 +254,64 @@ spec:
         duration: 15s
         factor: 2
         maxDuration: 3m
+---
+# Crossplane 2.4: the control plane that turns declared Roles, Databases and
+# Topics into real ones. Core only; providers are in the next Application.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: crossplane
+spec:
+  project: platform
+  sources:
+    - repoURL: https://charts.crossplane.io/stable
+      chart: crossplane
+      targetRevision: 2.4.3
+      helm:
+        releaseName: crossplane
+        valueFiles:
+          - $values/platform/crossplane/values.yaml
+    - repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: crossplane-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: restricted
+        pod-security.kubernetes.io/enforce-version: latest
+---
+# The providers and the connections they use: provider-sql and the lab
+# Postgres admin connection (sealed). Each kind only exists once Crossplane
+# (above) and then the provider have installed their CRDs, hence the retries
+# and the dry-run skip.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: crossplane-config
+spec:
+  project: platform
+  source:
+    repoURL: git@github.com:DEVOPS-CANARY/GitOps-Repo.git
+    targetRevision: main
+    path: platform/crossplane/config
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: crossplane-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff: { duration: 15s, factor: 2, maxDuration: 3m }
+    syncOptions:
+      - SkipDryRunOnMissingResource=true
