@@ -1,0 +1,16 @@
+# The lab's Kafka (Docker next to the cluster, scripts/lab-services.sh), on its
+# client listener host.minikube.internal:19092 as the SCRAM superuser "admin"
+# (lab-kafka-admin.sealed.yaml: brokers + SASL in one JSON document).
+# At RSSB: the Kafka team hands over an admin principal limited to the
+# topic prefixes the platform manages.
+apiVersion: kafka.m.crossplane.io/v1alpha1
+kind: ClusterProviderConfig
+metadata:
+  name: lab-kafka
+spec:
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: crossplane-system
+      name: lab-kafka-admin
+      key: credentials

@@ -64,6 +64,8 @@ spec:
       kind: DeploymentRuntimeConfig
     - group: postgresql.sql.m.crossplane.io # the lab Postgres, shared by all apps
       kind: ClusterProviderConfig
+    - group: kafka.m.crossplane.io # the lab Kafka, shared by all apps
+      kind: ClusterProviderConfig
 ---
 # Gateway API v1.6.3: the version Traefik 3.7 supports. Straight from the
 # Kubernetes project's repo at that tag, so an upgrade is one line here.
@@ -289,8 +291,8 @@ spec:
         pod-security.kubernetes.io/enforce: restricted
         pod-security.kubernetes.io/enforce-version: latest
 ---
-# The providers and the connections they use: provider-sql and the lab
-# Postgres admin connection (sealed). Each kind only exists once Crossplane
+# The providers and the connections they use: provider-sql and provider-kafka
+# with the lab Postgres and Kafka admin connections (sealed). Each kind only exists once Crossplane
 # (above) and then the provider have installed their CRDs, hence the retries
 # and the dry-run skip.
 apiVersion: argoproj.io/v1alpha1

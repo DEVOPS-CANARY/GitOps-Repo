@@ -1,0 +1,12 @@
+# provider-kafka: topics, SCRAM users and ACLs as Kubernetes objects. Apps
+# declare theirs in their namespace; this provider creates them on the lab Kafka.
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/provider-kafka:v1.4.2
+  runtimeConfigRef:
+    name: restricted
