@@ -18,6 +18,8 @@ env:
   KUBECONFORM_VERSION: v0.8.0
   # JSON schemas for CRD kinds, pinned to a commit of the catalog.
   CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/501527ab9c40c827144c8f45945b25a023e344ce
+  # Kinds the catalog does not carry (provider-kafka), vendored next to the chart.
+  CHART_SCHEMAS: https://raw.githubusercontent.com/DEVOPS-CANARY/helm-charts/main/schemas
   CHART_REGISTRY: oci://ghcr.io/devops-canary/charts
 
 jobs:
@@ -50,13 +52,15 @@ jobs:
           set -euo pipefail
           kubectl kustomize bootstrap/argo-config | kubeconform -strict -summary \
             -schema-location default \
-            -schema-location "$CRD_SCHEMAS/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json"
+            -schema-location "$CRD_SCHEMAS/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
+            -schema-location "$CHART_SCHEMAS/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json"
 
       - name: Policies (platform/policies)
         run: |
           set -euo pipefail
           kubeconform -strict -summary -schema-location default \
             -schema-location "$CRD_SCHEMAS/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
+            -schema-location "$CHART_SCHEMAS/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
             platform/policies/*.yaml
 
       # The policies against sample objects (platform/policies/tests): the
@@ -96,6 +100,7 @@ jobs:
               -f "apps/$app/values.yaml" -f "$values" \
               | sed -n '/^---/,$p' \
               | kubeconform -strict -summary -schema-location default \
-                  -schema-location "$CRD_SCHEMAS/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json"
+                  -schema-location "$CRD_SCHEMAS/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
+                  -schema-location "$CHART_SCHEMAS/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json"
             echo "::endgroup::"
           done
